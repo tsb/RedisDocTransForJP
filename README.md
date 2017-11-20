@@ -10,3 +10,4 @@ https://redis-documentasion-japanese.readthedocs.io/ja/latest/
 https://github.com/mocobeta/redis-doc-ja
 https://gist.github.com/key-amb/c641947a2139fdd81684
 
+誤訳、タイポなどは issue および pull request でお願いします。
