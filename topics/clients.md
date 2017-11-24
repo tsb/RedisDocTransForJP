@@ -81,34 +81,35 @@ Linux環境下では、以下のようなコマンドで現在のセッション
 クエリ―バッファのハードリミット
 ---
 
-Every client is also subject to a query buffer limit. This is a non-configurable hard limit that will close the connection when the client query buffer (that is the buffer we use to accumulate commands from the client) reaches 1 GB, and is actually only an extreme limit to avoid a server crash in case of client or server software bugs.
+すべてのクライアントがクエリバッファリミットの対象となる。これは設定変更ができないハードリミットで、クライアントクエリバッファが 1GB に達したらコネクションはクローズされる（バッファはクライアントからのコマンドを蓄積するために利用される）。これは実際のところ、クライアントやソフトウェアのバグによってサーバーがクラッシュすることを防ぐためのリミットである。
 
-Client timeouts
+
+クライアントのタイムアウト
 ---
 
-By default recent versions of Redis don't close the connection with the client
-if the client is idle for many seconds: the connection will remain open forever.
+直近のバージョンのデフォルトでは、Redis はコネクションを閉じることは無い。長期間アイドル状態であってもコネクションは永続的に保持される。
 
-However if you don't like this behavior, you can configure a timeout, so that
-if the client is idle for more than the specified number of seconds, the client connection will be closed.
+しかしながらこの挙動が好ましくない場合は、タイムアウトパラメータを変更することで、設定した秒数を越えてアイドルを続けているコネクションを閉じることができる。
 
-You can configure this limit via `redis.conf` or simply using `CONFIG SET timeout <value>`.
+このリミットは `redis.conf`もしくは単純に `CONFIG SET timeout <value>` で変更できる。
 
-Note that the timeout only applies to normal clients and it **does not apply to Pub/Sub clients**, since a Pub/Sub connection is a *push style* connection so a client that is idle is the norm.
+なお、このタイムアウトは通常のクライアントのみに適用され、**Pub/Sub`クライアントには適用されない**。なぜならば Pub/Sub に関するコネクションは *プッシュ型* であるからだ。
 
-Even if by default connections are not subject to timeout, there are two conditions when it makes sense to set a timeout:
+デフォルトでコネクションはタイムアウトしないため、以下のような 2つの条件ではタイムアウトを設定することを考えるべきでしょう。
 
-* Mission critical applications where a bug in the client software may saturate the Redis server with idle connections, causing service disruption.
-* As a debugging mechanism in order to be able to connect with the server if a bug in the client software saturates the server with idle connections, making it impossible to interact with the server.
+* ミッションクリティカルなアプリケーション、そのクライアントソフトウェアにバグがあり、Redis がアイドルコネクションを保持し続けることでサービスに影響が出る可能性がある場合
 
-Timeouts are not to be considered very precise: Redis avoids to set timer events or to run O(N) algorithms in order to check idle clients, so the check is performed incrementally from time to time. This means that it is possible that while the timeout is set to 10 seconds, the client connection will be closed, for instance, after 12 seconds if many clients are connected at the same time.
+* クライアントソフトウェアのバグによってアイドルコネクションが保持されるケースにおいて、デバッグ目的でサーバに接続するため
 
-CLIENT command
+タイムアウトは正確ではない点を考慮しなくてはなりません。Redis がタイマーイベントをセットする、あるいは O(N) のアルゴリズムでアイドルコネクションをチェックするといったことを回避するため、チェックはときどき段階的に行われます。これはつまり、タイムアウトが 10秒に設定されているケースにおいて、多数のクライアントが接続していると 12秒後に多数のコネクションが同時に閉じられる、といった可能性があることを意味します。
+
+
+クライアントのコマンド
 ---
 
-The Redis client command allows to inspect the state of every connected client, to kill a specific client, to set names to connections. It is a very powerful debugging tool if you use Redis at scale.
+Redis のコマンドによって、すべてのコネクションの状態について知ることができます。特定のコネクションを kill することもできるし、名前を設定することもできます。Redis を使うときに、これは非常に強力なデバッグツールとなります。
 
-`CLIENT LIST` is used in order to obtain a list of connected clients and their state:
+`CLIENT LIST` はコマンドのリストや状態を取得するためのものです。
 
 ```
 redis 127.0.0.1:6379> client list
@@ -116,27 +117,27 @@ addr=127.0.0.1:52555 fd=5 name= age=855 idle=0 flags=N db=0 sub=0 psub=0 multi=-
 addr=127.0.0.1:52787 fd=6 name= age=6 idle=5 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=ping
 ```
 
-In the above example session two clients are connected to the Redis server. The meaning of a few of the most interesting fields is the following:
+上記の例では 2つのクライアントが接続しています。それぞれのフィールドの意味は以下の通りです。
 
-* **addr**: The client address, that is, the client IP and the remote port number it used to connect with the Redis server.
-* **fd**: The client socket file descriptor number.
-* **name**: The client name as set by `CLIENT SETNAME`.
-* **age**: The number of seconds the connection existed for.
-* **idle**: The number of seconds the connection is idle.
-* **flags**: The kind of client (N means normal client, check the [full list of flags](http://redis.io/commands/client-list)).
-* **omem**: The amount of memory used by the client for the output buffer.
-* **cmd**: The last executed command.
 
-See the [CLIENT LIST](http://redis.io/commands/client-list) documentation for the full list of fields and their meaning.
+* **addr**: クライアントの IPアドレスとポート番号
+* **fd**: ソケットファイルのデスクリプタ番号
+* **name**: `CLIENT SETNAME`で設定できる名前
+* **age**: コネクションが維持されている秒数
+* **idle**: アイドルのまま続いている秒数
+* **flags**: クライアントの種別（Nは通常のクライアント、等。詳細は [full list of flags](http://redis.io/commands/client-list)）
+* **omem**: アウトプットバッファ―のために使われているメモリ量
+* **cmd**: 最後に実行したコマンド
 
-Once you have the list of clients, you can easily close the connection with a client using the `CLIENT KILL` command specifying the client address as argument.
+フィールドのすべての項目や意味については、[CLIENT LIST](http://redis.io/commands/client-list) のドキュメントも参照のこと。
 
-The commands `CLIENT SETNAME` and `CLIENT GETNAME` can be used to set and get the connection name. Starting with Redis 4.0, the client name is shown in the
-`SLOWLOG` output, so that it gets simpler to identify clients that are creating
-latency issues.
+一度リストを確認したら、`CLIENT KILL`コマンドに IPアドレスを引数として渡して実行することで、特定のクライアントの接続を簡単に閉じることができる。
 
-TCP keepalive
+`CLIENT SETNAME` および `CLIENT GETNAME`コマンドは、コネクションに関して名前を設定したり確認したりするために使われる。Redis 4.0 からは、`SLOWLOG`
+ のアウトプットにクライアントの名前が付与されるので、それによって今までよりも簡単に高いレイテンシの原因となっているクライアントを特定できるだろう。
+
+
+TCPキープアライブ
 ---
 
-Recent versions of Redis (3.2 or greater) have TCP keepalive (`SO_KEEPALIVE` socket option) enabled by default and set to about 300 seconds. This option is useful in order to detect dead peers (clients that cannot be reached even if they look connected). Moreover, if there is network equipment between clients and servers that need to see some traffic in order to take the connection open, the option will prevent unexpected connection closed events.
-
+直近のバージョン（3.2以降）では、デフォルトで TCPキープアライブ（`SO_KEEPALIVE`ソケットオプション）が 300秒で有効化されている。このオプションは死んだピアを検出することに役立つ（接続されているように見えてクライアントへの疎通性が失われているケースなどだ）。さらに言えば、クライアントとサーバー間でコネクションを維持するために一定のトラフィックが必要なケースでは、このオプションによって意図しない断を避けることができるだろう。
