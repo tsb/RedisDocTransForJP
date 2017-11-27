@@ -44,43 +44,39 @@ TCPバスやバイナリープロトコルを用いてすべてのノードが�
 書き込み安全
 ---
 
-Redis Cluster uses asynchronous replication between nodes, and **last failover wins** implicit merge function. This means that the last elected master dataset eventually replaces all the other replicas. There is always a window of time when it is possible to lose writes during partitions. However these windows are very different in the case of a client that is connected to the majority of masters, and a client that is connected to the minority of masters.
+Redis クラスタはノード間で非同期レプリケーションを行い、最後のフェイルオーバによって暗黙的なマージが行われます。これが意味するところは、すべてのレプリカのデータは最後に選出されたマスタのデータによって置き換えられるということです。パーティションに関して、常にデータを失いうるタイムウィンドウが存在します。しかしながら、これらのウィンドウは多数派のマスターあるいは少数派のマスター、どちらに接続しているかによって大きく異なります。
 
-Redis Cluster tries harder to retain writes that are performed by clients connected to the majority of masters, compared to writes performed in the minority side.
-The following are examples of scenarios that lead to loss of acknowledged
-writes received in the majority partitions during failures:
+Redis クラスタは、少数派のマスターに接続しているケースと比較して、多数派のマスターに接続している場合には書き込みを保持しやすくなります。以下は多数派のパーティションに対する書き込みが失われるシナリオの例です。
 
-1. A write may reach a master, but while the master may be able to reply to the client, the write may not be propagated to slaves via the asynchronous replication used between master and slave nodes. If the master dies without the write reaching the slaves, the write is lost forever if the master is unreachable for a long enough period that one of its slaves is promoted. This is usually hard to observe in the case of a total, sudden failure of a master node since masters try to reply to clients (with the acknowledge of the write) and slaves (propagating the write) at about the same time. However it is a real world failure mode.
+    マスターとスレーブの間は非同期のレプリケーションとなっているため、書き込みはマスターに到達したものの、マスターがクライアントに応答を返した時点でスレーブに書き込みが伝達されていないケースが起こりうる。もしマスターがスレーブに書き込みを送出できず死んでしまった場合、一定期間を待ってスレーブが昇格してしまうため、その書き込みは失われてしまう。マスターはクライアントに（書き込み完了の）応答を返すとほぼ同時にスレーブにも書き込みを伝えるため、唐突にマスターが障害となるケースはトータルで考えるとごくまれなものだ。しかし、現実で起こりうるシナリオとして考慮すべきである。
 
-2. Another theoretically possible failure mode where writes are lost is the following:
+    理論的には、もうひとつ考慮すべき障害ケースがある。
 
-* A master is unreachable because of a partition.
-* It gets failed over by one of its slaves.
-* After some time it may be reachable again.
-* A client with an out-of-date routing table may write to the old master before it is converted into a slave (of the new master) by the cluster.
+        パーティションにおけるマスターが疎通性を失う
+        このとき、ひとつのスレーブによってフェイルオーバが行われる
+        しばらく待つと、マスターの疎通性が回復する
+        クライアントが古いルーティングテーブルに沿って、クラスターにおいて（新しいマスターの）スレーブになる処理が完了しないうちに、古いマスターに対し書き込みを行う
 
-The second failure mode is unlikely to happen because master nodes unable to communicate with the majority of the other masters for enough time to be failed over will no longer accept writes, and when the partition is fixed writes are still refused for a small amount of time to allow other nodes to inform about configuration changes. This failure mode also requires that the client's routing table has not yet been updated.
+2番目の障害シナリオはほとんど起こらないと言えます。フェイルオーバが起こるだけ長い時間、マスターノードが他の多数派のマスターと通信できないということは、書き込みもできないことを意味します。パーティションが復旧したとしても、他のノードから設定変更を受け入れるために書き込みはしばらくの間拒否されます。この障害シナリオでは、クライアントのルーティングテーブルが古い場合という条件もつきます。
 
-Writes targeting the minority side of a partition have a larger window in which to get lost. For example, Redis Cluster loses a non-trivial number of writes on partitions where there is a minority of masters and at least one or more clients, since all the writes sent to the masters may potentially get lost if the masters are failed over in the majority side.
+少数派側のパーティションでは、書き込みを失う可能性があるウィンドウがより大きくなります。多数派側のマスターがフェイルオーバした場合には、すべてのマスターへの書き込みが失われる可能性があります。このとき少数派のマスターにひとつ以上のクライアントが接続していたとすると、少なくない数の書き込みが失われるでしょう。
 
-Specifically, for a master to be failed over it must be unreachable by the majority of masters for at least `NODE_TIMEOUT`, so if the partition is fixed before that time, no writes are lost. When the partition lasts for more than `NODE_TIMEOUT`, all the writes performed in the minority side up to that point may be lost. However the minority side of a Redis Cluster will start refusing writes as soon as `NODE_TIMEOUT` time has elapsed without contact with the majority, so there is a maximum window after which the minority becomes no longer available. Hence, no writes are accepted or lost after that time.
+特に、マスターのフェイルオーバは、他の多数派のマスターから NODE_TIMEOUT の時間だけ疎通性が失われている場合に限るので、パーティションがそれよりも短い時間で復旧した場合は、書き込みが失われることはありません。NODE_TIMEOUT よりも長く続いた場合には、それ以降で少数派側に行われた書き込みは失われます。しかしながら、少数派側の Redisクラスターは多数派との通信が失われて NODE_TIEMOUT の時間が経過すると、即座に書き込みを拒否するようになります。つまり、そこから算出できる時間が最大のウィンドウということになります。この時間が過ぎたあとは、書き込みはできないので失われることもありません。
 
-Availability
+
+可用性
 ---
 
-Redis Cluster is not available in the minority side of the partition. In the majority side of the partition assuming that there are at least the majority of masters and a slave for every unreachable master, the cluster becomes available again after `NODE_TIMEOUT` time plus a few more seconds required for a slave to get elected and failover its master (failovers are usually executed in a matter of 1 or 2 seconds).
+Redisクラスターはパーティションの少数派側では利用できません。とあるパーティションにおける多数派側として、多くのマスターと疎通性が失われたマスターに付随するスレーブを考えるとき、そのクラスターは NODE_TIMEOUT に加えて数秒待つことで再度利用可能になるでしょう。この数秒はスレーブが選出されてマスターにフェイルオーバするための時間として必要になります（フェイルオーバはたいてい 1-2秒の間に行われます）。
 
-This means that Redis Cluster is designed to survive failures of a few nodes in the cluster, but it is not a suitable solution for applications that require availability in the event of large net splits.
+このことから、Redis クラスタは少数ノードの障害には耐性を持つが、大規模なネットワーク障害に対する可用性が求められるアプリケーションには適さないということが分かります。
 
-In the example of a cluster composed of N master nodes where every node has a single slave, the majority side of the cluster will remain available as long as a single node is partitioned away, and will remain available with a probability of `1-(1/(N*2-1))` when two nodes are partitioned away (after the first node fails we are left with `N*2-1` nodes in total, and the probability of the only master without a replica to fail is `1/(N*2-1))`.
+例えば、各ノードが 1つのスレーブを持つ N 個のマスターで構成されたクラスターを考えると、多数派側はひとつのノードが利用できなくなっても継続的に利用可能ですし、1-(1/(N*2-1)) の確率で 2つのノードが利用できなくなっても稼働できます（最初のノードが障害になってから N*2-1 のノードが存在し、このときレプリカを持たないマスターが障害になる確率は 1/(N*2-1)です）。
 
-For example, in a cluster with 5 nodes and a single slave per node, there is a `1/(5*2-1) = 11.11%` probability that after two nodes are partitioned away from the majority, the cluster will no longer be available.
+5ノードがそれぞれスレーブを持つ構成を例にとると、2つのノードが利用できなくなったときに 1/(5*2-1) = 11.11% の確率でクラスターは稼働できなくなります。
 
-Thanks to a Redis Cluster feature called **replicas migration** the Cluster
-availability is improved in many real world scenarios by the fact that
-replicas migrate to orphaned masters (masters no longer having replicas).
-So at every successful failure event, the cluster may reconfigure the slaves
-layout in order to better resist the next failure.
+Redisクラスターのレプリカマイグレーション機能のおかげで、レプリカは孤立したマスター（レプリカを持たないもの）に移行できるようになり、現実世界におけるクラスタの可用性は改善しました。そのため、障害が起こるたびにクラスタはスレーブの構成を変更し、次の障害に備えることができます。
+
 
 Performance
 ---
