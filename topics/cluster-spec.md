@@ -78,33 +78,29 @@ Redisクラスターはパーティションの少数派側では利用できま
 Redisクラスターの**レプリカマイグレーション**のおかげで、レプリカは孤立したマスター（レプリカを持たないもの）に移行できるようになり、現実世界におけるクラスタの可用性は改善しました。そのため、障害が起こるたびにクラスタはスレーブの構成を変更し、次の障害に備えることができます。
 
 
-Performance
+パフォーマンス
 ---
 
-In Redis Cluster nodes don't proxy commands to the right node in charge for a given key, but instead they redirect clients to the right nodes serving a given portion of the key space.
+Redis クラスターのノードはコマンドを他のノードに転送しませんが、その代わりにキーに対して割り当てられたノードに関する情報を返し、クライアントをリダイレクトさせます。
 
-Eventually clients obtain an up-to-date representation of the cluster and which node serves which subset of keys, so during normal operations clients directly contact the right nodes in order to send a given command.
+結果としてクライアントはクラスターの最新の状態と、各キーに対応するノードの情報を得ることになり、適切なノードに対してコマンドを送り、操作を行います。
 
-Because of the use of asynchronous replication, nodes do not wait for other nodes' acknowledgment of writes (if not explicitly requested using the `WAIT` command).
+非同期レプリケーションを採用しているため、ノードは他のノードが書き込みを受信するのを待ちません（`WAIT`コマンドを明示的に実行した場合を除く）
 
-Also, because multi-key commands are only limited to *near* keys, data is never moved between nodes except when resharding.
+また、複数のキーを扱うコマンドが*近くの*キーのみで動作するので、リシャーディングを除いて、データがノード間で移動することはありません。
 
-Normal operations are handled exactly as in the case of a single Redis instance. This means that in a Redis Cluster with N master nodes you can expect the same performance as a single Redis instance multiplied by N as the design scales linearly. At the same time the query is usually performed in a single round trip, since clients usually retain persistent connections with the nodes, so latency figures are also the same as the single standalone Redis node case.
+通常の操作は単一の Redisインスタンスの場合とほとんど同様に扱われます。これはつまり、N個のマスターノードで構成される Redisクラスターと、単一の Redisインスタンスを N個直列に並べてスケールアウトさせた構成は同等のパフォーマンスを発揮できるということです。同時に、クライアントは各ノードと永続的な接続を維持するように動作するため、クエリの通信はほとんどのケースで 1回の往復で済むでしょう。そのため、レイテンシは、単体つまりスタンドアローンで動作する Redisノードの場合と比べても遜色ないと言えます。
 
-Very high performance and scalability while preserving weak but
-reasonable forms of data safety and availability is the main goal of
-Redis Cluster.
+非常に高いパフォーマンスとスケーラビリティを達成しつつ、弱点と呼べる部分に関してもある程度のデータの安全性、可用性を担保することが Redisクラスターのゴールと言えるでしょう。
 
-Why merge operations are avoided
+
+マージ操作をなぜ回避すべきか
 ---
 
-Redis Cluster design avoids conflicting versions of the same key-value pair in multiple nodes as in the case of the Redis data model this is not always desirable. Values in Redis are often very large; it is common to see lists or sorted sets with millions of elements. Also data types are semantically complex. Transferring and merging these kind of values can be a major bottleneck and/or may require the non-trivial involvement of application-side logic, additional memory to store meta-data, and so forth.
+Redisクラスターは、Redis のデータ構造的に望ましくないという理由で、まったく同じキーとバリューのペアに関して、複数のノードで異なるバージョンが競合しないよう設計されています。Redis におけるバリューはしばしば大きなサイズとなり、数百万という要素についてリストしたり並べ替えたりという操作も多く行われます。データタイプは複雑ですが、それぞれに意味があります。これらのバリューを転送したりマージすることは、大きなボトルネックになる可能性があります。また、アプリケーション側のロジックで大規模な改修が必要になったり、メタデータを格納するための追加メモリが必要になることもあります。
 
-There are no strict technological limits here. CRDTs or synchronously replicated
-state machines can model complex data types similar to Redis. However, the
-actual run time behavior of such systems would not be similar to Redis Cluster.
-Redis Cluster was designed in order to cover the exact use cases of the
-non-clustered Redis version.
+技術的な制約は問題ではありません。CRDTs(Conflict-free Replicated Data Type) や同期的なレプリケーションによって、Redis に似た複雑なデータ構造を処理させることは可能でしょう。しかしながら、それらの仕組みは Redisクラスターとはまったく別のものになるはずです。Redisクラスターは旧来の非クラスタ―型の Redis を包含し、それらのユースケースにも対応するようにデザインされています。
+
 
 Overview of Redis Cluster main components
 ===
