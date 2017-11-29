@@ -102,29 +102,21 @@ Redisクラスターは、Redis のデータ構造的に望ましくないとい
 技術的な制約は問題ではありません。CRDTs(Conflict-free Replicated Data Type) や同期的なレプリケーションによって、Redis に似た複雑なデータ構造を処理させることは可能でしょう。しかしながら、それらの仕組みは Redisクラスターとはまったく別のものになるはずです。Redisクラスターは旧来の非クラスタ―型の Redis を包含し、それらのユースケースにも対応するようにデザインされています。
 
 
-Overview of Redis Cluster main components
+Redisクラスターの主な構成概要
 ===
 
-Keys distribution model
+キーの分散モデル
 ---
 
-The key space is split into 16384 slots, effectively setting an upper limit
-for the cluster size of 16384 master nodes (however the suggested max size of
-nodes is in the order of ~ 1000 nodes).
+キー空間はハッシュされて 16384スロットに分割されるので、最大でクラスターは 16384ノードのマスターを持つことができる（しかし、ノード数は最大でも 1000程度までにしておくことをお勧めする）。
 
-Each master node in a cluster handles a subset of the 16384 hash slots.
-The cluster is **stable** when there is no cluster reconfiguration in
-progress (i.e. where hash slots are being moved from one node to another).
-When the cluster is stable, a single hash slot will be served by a single node
-(however the serving node can have one or more slaves that will replace it in the case of net splits or failures,
-and that can be used in order to scale read operations where reading stale data is acceptable).
+各マスターノードは 16384スロットの一部を受け持つ。クラスターは再設定が進行中でないときは**安定している**と言える（ここで再設定とは、例えばひとつのノードから他のノードへスロットが移動することである）。クラスターが安定した状態であれば、ひとつのスロットは単一のノードで処理される（しかしながら、ネットワークの分断や障害の発生時、古いデータの読み込みを許容できるのであれば、読み込みが継続できるようひとつ以上のスレーブによって置き換えることができます）。
 
-The base algorithm used to map keys to hash slots is the following
-(read the next paragraph for the hash tag exception to this rule):
+基礎となるアルゴリズムは、以下のような形でハッシュのスロットをキーにマッピングを行います（このルールの例外であるハッシュタグは次の章で扱います）。
 
     HASH_SLOT = CRC16(key) mod 16384
 
-The CRC16 is specified as follows:
+CRC16 は以下のような仕様です。
 
 * Name: XMODEM (also known as ZMODEM or CRC-16/ACORN)
 * Width: 16 bit
@@ -135,44 +127,35 @@ The CRC16 is specified as follows:
 * Xor constant to output CRC: 0000
 * Output for "123456789": 31C3
 
-14 out of 16 CRC16 output bits are used (this is why there is
-a modulo 16384 operation in the formula above).
+CRC16 のアウトプットのうち 14ビットが使用されます（上の式が 16384 でモジュロ―演算となっているのは、これが理由です）。
 
-In our tests CRC16 behaved remarkably well in distributing different kinds of
-keys evenly across the 16384 slots.
+テストでは、CRC16 は 16384 のスロットに対し十分に分散した異なるキーを割り当てることが確認されています。
 
-**Note**: A reference implementation of the CRC16 algorithm used is available in the Appendix A of this document.
+**メモ**: CRC16 アルゴリズムの実装については付録A を参照してください。
 
-Keys hash tags
+
+キーのハッシュタグ
 ---
 
-There is an exception for the computation of the hash slot that is used in order
-to implement **hash tags**. Hash tags are a way to ensure that multiple keys
-are allocated in the same hash slot. This is used in order to implement
-multi-key operations in Redis Cluster.
+スロットに関するハッシュの計算には、**ハッシュタグ**を実装するために例外が設けられています。ハッシュタグは複数のキーを同じハッシュスロットに配置するために用いられます。これは、Redisクラスターで複数のキーに対する操作を実装するためのものです。
 
-In order to implement hash tags, the hash slot for a key is computed in a
-slightly different way in certain conditions.
-If the key contains a "{...}" pattern only the substring between
-`{` and `}` is hashed in order to obtain the hash slot. However since it is
-possible that there are multiple occurrences of `{` or `}` the algorithm is
-well specified by the following rules:
+ハッシュタグを実装するにあたって、あるキーに対するハッシュのスロットは少しだけ工夫して計算されます。
+キーが "{...}" という文字列を含む場合、スロットは `{` と `}` の間の文字列だけを使ったハッシュによって算出されます。しかし `{` と `}` の組が複数含まれることもありえるため、以下のようなルールに沿ってアルゴリズムが判断します。
 
-* IF the key contains a `{` character.
-* AND IF there is a `}` character to the right of `{`
-* AND IF there are one or more characters between the first occurrence of `{` and the first occurrence of `}`.
+* キーに `{` が含まれる
+* かつ、`{` の右側に `}` があること
+* 最初の `{` と 最初の `}` の間に、少なくとも 1文字が存在すること
 
-Then instead of hashing the key, only what is between the first occurrence of `{` and the following first occurrence of `}` is hashed.
+このときはキーをハッシュするのではなく、最初の `{` と `}` の間に含まれる文字列のみをハッシュの計算に用います。
 
-Examples:
+例:
+* 2つのキー `{user1000}.following` と `{user1000}.followers` は、どちらもスロットを特定するために `user1000` でハッシュされるため、同じスロットになります。
+* `foo{}{bar}` というキーは部分文字列ではなく、まとめてハッシュされます。最初の `{` と `}` の間に文字が存在しないためです。
+* `foo{{bar}}zap` というキーを考えると、このときは文字列 `{bar` でハッシュされます。
+* `foo{bar}{zap}` というキーは `bar` でハッシュされます。アルゴリズムは（空の場合も含めて）最初に `{` と `}` にマッチした結果だけを用いるためです。
+* どのような文字列が続く場合でも、`{}` という文字列で始まるキーに関してはそのままハッシュされるようなアルゴリズムになっています。バイナリデータをキー名に使いたいときは、この性質が役に立つでしょう。
 
-* The two keys `{user1000}.following` and `{user1000}.followers` will hash to the same hash slot since only the substring `user1000` will be hashed in order to compute the hash slot.
-* For the key `foo{}{bar}` the whole key will be hashed as usually since the first occurrence of `{` is followed by `}` on the right without characters in the middle.
-* For the key `foo{{bar}}zap` the substring `{bar` will be hashed, because it is the substring between the first occurrence of `{` and the first occurrence of `}` on its right.
-* For the key `foo{bar}{zap}` the substring `bar` will be hashed, since the algorithm stops at the first valid or invalid (without bytes inside) match of `{` and `}`.
-* What follows from the algorithm is that if the key starts with `{}`, it is guaranteed to be hashed as a whole. This is useful when using binary data as key names.
-
-Adding the hash tags exception, the following is an implementation of the `HASH_SLOT` function in Ruby and C language.
+ハッシュタグの例外を追加するにあたり、Ruby と C言語における `HASH_SLOT` 関数の実装は以下のようになります。
 
 Ruby example code:
 
@@ -210,6 +193,7 @@ C example code:
          * what is in the middle between { and }. */
         return crc16(key+s+1,e-s-1) & 16383;
     }
+
 
 Cluster nodes attributes
 ---
