@@ -195,69 +195,41 @@ C example code:
     }
 
 
-Cluster nodes attributes
+クラスターノードの属性
 ---
 
-Every node has a unique name in the cluster. The node name is the
-hex representation of a 160 bit random number, obtained the first time a
-node is started (usually using /dev/urandom).
-The node will save its ID in the node configuration file, and will use the
-same ID forever, or at least as long as the node configuration file is not
-deleted by the system administrator, or a *hard reset* is requested
-via the `CLUSTER RESET` command.
+すべてのノードはそれぞれ異なった名前を持ちます。ノードの名前は 160ビットのランダムな数字によって 16進数で割り当てられ、ノードがはじめに起動したときに計算されます（ /dev/urandom を使います ）。
+ノードは設定ファイルに ID を保存し、設定ファイルをシステム管理者が削除するか、あるいは`CLUSTER RESET` コマンドによって*ハードリセット*されるまで、その後ずっと同じ ID が使われます。
 
-The node ID is used to identify every node across the whole cluster.
-It is possible for a given node to change its IP address without any need
-to also change the node ID. The cluster is also able to detect the change
-in IP/port and reconfigure using the gossip protocol running over the cluster
-bus.
+ノードの ID はクラスターの中でノードを特定するためのものです。
+ノードは ID を変えることなく、IPアドレスを変化させることができます。クラスターはバス上でゴシッププロトコルを用いて、IP やポート、設定値の変化を検出します。
 
-The node ID is not the only information associated with each node, but is
-the only one that is always globally consistent. Every node has also the
-following set of information associated. Some information is about the
-cluster configuration detail of this specific node, and is eventually
-consistent across the cluster. Some other information, like the last time
-a node was pinged, is instead local to each node.
+ID が各ノードに割り当てられた唯一の情報というわけではありませんが、常に一定の値を示すものは他にありません。各ノードは後述するように幾つかの情報も持ちます。いくつかは、特定のノードに関する設定の詳細に関するもので、クラスタの中で一貫した値となっています。その他、ノードの監視情報などは各ノードがローカルに保持します。
 
-Every node maintains the following information about other nodes that it is
-aware of in the cluster: The node ID, IP and port of the node, a set of
-flags, what is the master of the node if it is flagged as `slave`, last time
-the node was pinged and the last time the pong was received, the current
-*configuration epoch* of the node (explained later in this specification),
-the link state and finally the set of hash slots served.
+すべてのノードは、クラスター内で認識している他のノードに関する情報も持ちます。ノードID、IPアドレスやポート、フラグセット、`slave` フラグの場合はどれがマスターか、最後に ping された時間および pong を受け取った時間、現在の*エポック設定*（これはあとで説明します）、接続の状態、最終的に割り当てられたスロットなどです。
 
-A detailed [explanation of all the node fields](http://redis.io/commands/cluster-nodes) is described in the `CLUSTER NODES` documentation.
+[フィールドの詳細](http://redis.io/commands/cluster-nodes) は `CLUSTER NODES` ドキュメントに記載されています。
 
-The `CLUSTER NODES` command can be sent to any node in the cluster and provides the state of the cluster and the information for each node according to the local view the queried node has of the cluster.
+`CLUSTER NODES`コマンドはどのノードにも送ることができ、クラスターの状態と、クエリを受けた各ノードが持っているローカルな情報を返します。
 
-The following is sample output of the `CLUSTER NODES` command sent to a master
-node in a small cluster of three nodes.
+以下は `CLUSTER NODES` コマンドのサンプルで、小規模な 3ノードのクラスターでマスターにコマンドを送ったときの例です。
 
     $ redis-cli cluster nodes
     d1861060fe6a534d42d8a19aeb36600e18785e04 127.0.0.1:6379 myself - 0 1318428930 1 connected 0-1364
     3886e65cc906bfd9b1f7e7bde468726a052d1dae 127.0.0.1:6380 master - 1318428930 1318428931 2 connected 1365-2729
     d289c575dcbc4bdd2931585fd4339089e461a27d 127.0.0.1:6381 master - 1318428931 1318428931 3 connected 2730-4095
 
-In the above listing the different fields are in order: node id, address:port, flags, last ping sent, last pong received, configuration epoch, link state, slots. Details about the above fields will be covered as soon as we talk of specific parts of Redis Cluster.
+ここで順に並んでいるフィールドは、ノードID、アドレス:ポート、フラグ、最後に ping された時間、pong を受けとった時間、エポック設定、接続の状態、スロットです。
+各フィールドの詳細は、言及すべき Redisクラスターの一部として今後補足していきます。
 
-The Cluster bus
+
+クラスターバス
 ---
 
-Every Redis Cluster node has an additional TCP port for receiving
-incoming connections from other Redis Cluster nodes. This port is at a fixed
-offset from the normal TCP port used to receive incoming connections
-from clients. To obtain the Redis Cluster port, 10000 should be added to
-the normal commands port. For example, if a Redis node is listening for
-client connections on port 6379, the Cluster bus port 16379 will also be
-opened.
+すべての Redisクラスターのノードは、他のノードからコネクションを受けるため、追加の TCPポートが必要になります。このポートは、通常クライアントからコネクションを受けるためのポート番号に固定値を加えた値をとります。Redisクラスターでは、通常のポート番号に 10000 を加えた値を使います。例えばクライアント用のポートが 6379 でリッスンしている場合、16379 がクラスターバス用に必要となります。
 
-Node-to-node communication happens exclusively using the Cluster bus and
-the Cluster bus protocol: a binary protocol composed of frames
-of different types and sizes. The Cluster bus binary protocol is not
-publicly documented since it is not intended for external software devices
-to talk with Redis Cluster nodes using this protocol. However you can
-obtain more details about the Cluster bus protocol by reading the
-`cluster.h` and `cluster.c` files in the Redis Cluster source code.
+ノード間のやりとりはクラスターバスとそのプロトコル（異なるタイプとサイズのフレームで構成されるバイナリプロトコル）を使って排他的に行われます。このプロトコルを使って Redisクラスターのノードが他のソフトウェア等とやりとりすることは想定されていないため、ドキュメントでは説明していません。もし詳細を知りたい場合は `cluster.h` や `cluster.c` が該当するソースコードになりますので、確認するとよいでしょう。
+
 
 Cluster topology
 ---
