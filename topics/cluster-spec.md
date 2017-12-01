@@ -231,93 +231,65 @@ ID が各ノードに割り当てられた唯一の情報というわけでは�
 ノード間のやりとりはクラスターバスとそのプロトコル（異なるタイプとサイズのフレームで構成されるバイナリプロトコル）を使って排他的に行われます。このプロトコルを使って Redisクラスターのノードが他のソフトウェア等とやりとりすることは想定されていないため、ドキュメントでは説明していません。もし詳細を知りたい場合は `cluster.h` や `cluster.c` が該当するソースコードになりますので、確認するとよいでしょう。
 
 
-Cluster topology
+クラスターのトポロジー
 ---
 
-Redis Cluster is a full mesh where every node is connected with every other node using a TCP connection.
+Redisクラスターはフルメッシュ構造であり、TCPコネクションを用いてすべてのノードがそぞれ、すべての他のノードに接続します。
 
-In a cluster of N nodes, every node has N-1 outgoing TCP connections, and N-1 incoming connections.
+Nノードの構成を考えるとき、すべてのノードは N-1 の外向きの TCPコネクションと同時に N-1 の内向きのコネクションも持ちます。
 
-These TCP connections are kept alive all the time and are not created on demand.
-When a node expects a pong reply in response to a ping in the cluster bus, before waiting long enough to mark the node as unreachable, it will try to
-refresh the connection with the node by reconnecting from scratch.
+これらの TCPコネクションは必要に応じて作られるのではなく、常に維持されます。
 
-While Redis Cluster nodes form a full mesh, **nodes use a gossip protocol and
-a configuration update mechanism in order to avoid exchanging too many
-messages between nodes during normal conditions**, so the number of messages
-exchanged is not exponential.
+ノードは、クラスターバス上で ping に対して pong を返すのですが、このとき疎通性が失われたことを検知するために長い時間待つのではなく、もう一度コネクションを張り直すことを試します。
 
-Nodes handshake
+**ノードは通常通りに動いているときに多数のメッセージを交換することを避け、代わりにゴシッププロトコルで設定をアップデートする仕組みを用いる**ので、フルメッシュのコネクションを保持していても、交換されるメッセージが指数関数的に増大することはありません。
+
+
+ノードのハンドシェイク
 ---
 
-Nodes always accept connections on the cluster bus port, and even reply to
-pings when received, even if the pinging node is not trusted.
-However, all other packets will be discarded by the receiving node if the
-sending node is not considered part of the cluster.
+ノードはクラスターバス上のポートで常にコネクションを受け入れていて、たとえ ping 先のノードが信頼されていないものであったとしても、ping を受け取れば応答を返す。
+しかし、パケットを受信したノードがクラスターに所属していない場合、そのパケットは破棄される。
 
-A node will accept another node as part of the cluster only in two ways:
+ノードは以下の方法でのみ他のノードをクラスターの一部として扱う。
 
-* If a node presents itself with a `MEET` message. A meet message is exactly
-like a `PING` message, but forces the receiver to accept the node as part of
-the cluster. Nodes will send `MEET` messages to other nodes **only if** the system administrator requests this via the following command:
+* `MEET` メッセージを表明すること。このメッセージは `PING` と同じようなものではあるものの、受け取ったノードは、このメッセージによってクラスターの一部であることを認識する。ノードはシステムの管理者が以下のコマンドを実行した**ときにのみ** `MEET`メッセージを送出する。
 
     CLUSTER MEET ip port
 
-* A node will also register another node as part of the cluster if a node that is already trusted will gossip about this other node. So if A knows B, and B knows C, eventually B will send gossip messages to A about C. When this happens, A will register C as part of the network, and will try to connect with C.
+* とあるノードを考えた時そのノードは、すでに信頼済みのノードによってゴシップ（訳注: P2P におけるピア間の通信）された場合、クラスターの一部として登録される。つまり、例えば A が B を認識していて、B が C を認識しているとき、B はゴシップメッセージを A と C に送信する。このとき A は C をネットワークの一部として認識し、C に接続を試みる。
 
-This means that as long as we join nodes in any connected graph, they'll eventually form a fully connected graph automatically. This means that the cluster is able to auto-discover other nodes, but only if there is a trusted relationship that was forced by the system administrator.
+これはつまり、既存のグラフ構造にノードを追加した場合、自動的にすべてのノードが接続された結果が得られることを意味する。システム管理者によって信頼関係が確立される必要があるが、クラスターは他のノードを自動検出することができる。
 
-This mechanism makes the cluster more robust but prevents different Redis clusters from accidentally mixing after change of IP addresses or other network related events.
+この仕組みはクラスターをより堅牢にする上、IPアドレスの変更やネットワークに関連したイベントによって異なる Redisクラスターが混在してしまうことも防ぐ。
 
-Redirection and resharding
+
+リダイレクションとリシャーディング
 ===
 
-MOVED Redirection
+MOVED リダイレクション
 ---
 
-A Redis client is free to send queries to every node in the cluster, including
-slave nodes. The node will analyze the query, and if it is acceptable
-(that is, only a single key is mentioned in the query, or the multiple keys
-mentioned are all to the same hash slot) it will lookup what
-node is responsible for the hash slot where the key or keys belong.
+Redisクライアントは、スレーブノードも含めてすべてのノードにクエリを送出することができる。ノードはクエリを分析し、処理できるもの（クエリが単一キーか、あるいは複数キーだがすべてが同じスロットにある）ならば、キーを処理すべきノードを探す。
 
-If the hash slot is served by the node, the query is simply processed, otherwise
-the node will check its internal hash slot to node map, and will reply
-to the client with a MOVED error, like in the following example:
+もしスロットがそのノードに割り当てられていた場合、クエリはそのまま処理される。そうでない場合は内部でノードのマッピングを確認し、以下のような MOVED エラーを返す。
 
     GET x
     -MOVED 3999 127.0.0.1:6381
 
-The error includes the hash slot of the key (3999) and the ip:port of the
-instance that can serve the query. The client needs to reissue the query
-to the specified node's IP address and port.
-Note that even if the client waits a long time before reissuing the query,
-and in the meantime the cluster configuration changed, the destination node
-will reply again with a MOVED error if the hash slot 3999 is now served by
-another node. The same happens if the contacted node had no updated information.
+このエラーには、キーのスロット（3999）およびクエリを処理すべき IPアドレスとポートの組が含まれている。クライアントは指定されたアドレスとポートに対し、もう一度クエリを投げる必要がある。
+留意すべき点として、クライアント川でクエリを他のノードに再送する段階で時間を要し、そのときにクラスターの設定が変わってしまった場合、再送した先のノードが再度 MOVEDエラーを返す可能性がある。また、最初に通信したノードが最新の情報を持っていないケースでも同じような事象が起こりうる。
 
-So while from the point of view of the cluster nodes are identified by
-IDs we try to simplify our interface with the client just exposing a map
-between hash slots and Redis nodes identified by IP:port pairs.
+したがって、クラスターのノードから見た視点では ID によって各ノードが識別されますが、スロットとノードのマッピングを返すことでインターフェイスを簡略化しようとしています。
 
-The client is not required to, but should try to memorize that hash slot
-3999 is served by 127.0.0.1:6381. This way once a new command needs to
-be issued it can compute the hash slot of the target key and have a
-greater chance of choosing the right node.
+クライアントは、必須ではないものの、スロット3999 が 127.0.0.1:6381 に割り当てられているということを覚えておくべきです。それによって新しいコマンドを実行する必要が出てきたとき、キーをハッシュしてスロットを計算するだけでよく、正しいノードを選択できる確率が高まるでしょう。
 
-An alternative is to just refresh the whole client-side cluster layout
-using the `CLUSTER NODES` or `CLUSTER SLOTS` commands
-when a MOVED redirection is received. When a redirection is encountered, it
-is likely multiple slots were reconfigured rather than just one, so updating
-the client configuration as soon as possible is often the best strategy.
+加えて、MOVED のリダイレクトが発生した時に `CLUSTER NODES` あるいは `CLUSTER SLOTS`コマンドでクライアント側のクラスターレイアウトを丸ごとリフレッシュすることも考えられます。リダイレクトが発生するときには 1つではなく複数のスロットが再割り当てされたと考えられますので、速やかに情報を更新することはほとんどの場合でベストな戦略です。
 
-Note that when the Cluster is stable (no ongoing changes in the configuration),
-eventually all the clients will obtain a map of hash slots -> nodes, making
-the cluster efficient, with clients directly addressing the right nodes
-without redirections, proxies or other single point of failure entities.
+なお、クラスターが安定状態（実施中の変更がない）のときは、最終的にすべてのクライアントがスロットとノードのマッピングを保持し、効率的に、リダイレクトすることなく直接ノードにアクセスし、余分な経路や単一障害点を取り除くことができるでしょう、
 
-A client **must be also able to handle -ASK redirections** that are described
-later in this document, otherwise it is not a complete Redis Cluster client.
+クライアントは後述するように **-ASKリダイレクションを正しく取り扱わなくてはいけません**。そうでない場合、Redisクラスターに対応したクライアントとは言えません。
+
 
 Cluster live reconfiguration
 ---
