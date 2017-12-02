@@ -48,16 +48,16 @@ Redis クラスタはノード間で非同期レプリケーションを行い�
 
 Redis クラスタは、少数派のマスターに接続しているケースと比較して、多数派のマスターに接続している場合には書き込みを保持しやすくなります。以下は多数派のパーティションに対する書き込みが失われるシナリオの例です。
 
-1. マスターとスレーブの間は非同期のレプリケーションとなっているため、書き込みはマスターに到達したものの、マスターがクライアントに応答を返した時点でスレーブに書き込みが伝達されていないケースが起こりうる。もしマスターがスレーブに書き込みを送出できず死んでしまった場合、一定期間を待ってスレーブが昇格してしまうため、その書き込みは失われてしまう。マスターはクライアントに（書き込み完了の）応答を返すとほぼ同時にスレーブにも書き込みを伝えるため、唐突にマスターが障害となるケースはトータルで考えるとごくまれなものだ。しかし、現実で起こりうるシナリオとして考慮すべきである。
+1. マスターとスレーブの間は非同期のレプリケーションとなっているため、書き込みはマスターに到達したものの、マスターがクライアントに応答を返した時点でスレーブに書き込みが伝達されていないケースが起こりうる。もしマスターがスレーブに書き込みを送出できず死んでしまった場合、一定期間を待ってスレーブが昇格してしまうため、その書き込みは失われてしまう。マスターはクライアントに（書き込み完了の）応答を返すとほぼ同時にスレーブにも書き込みを伝えるため、唐突にマスターが障害となるケースはトータルで考えるとごくまれなものだ。しかし、現実で起こりうるシナリオとして考慮すべきだろう。
 
-2. 理論的には、もうひとつ考慮すべき障害ケースがある。
+2. 理論的には、もうひとつ考慮すべき障害ケースがあります。
 
 * パーティションにおけるマスターが疎通性を失う
 * このとき、ひとつのスレーブによってフェイルオーバが行われる
 * しばらく待つと、マスターの疎通性が回復する
 * クライアントが古いルーティングテーブルに沿って、クラスターにおいて（新しいマスターの）スレーブになる処理が完了しないうちに、古いマスターに対し書き込みを行う
 
-2番目の障害シナリオはほとんど起こらないと言えます。フェイルオーバが起こるだけ長い時間、マスターノードが他の多数派のマスターと通信できないということは、書き込みもできないことを意味します。パーティションが復旧したとしても、他のノードから設定変更を受け入れるために書き込みはしばらくの間拒否されます。この障害シナリオでは、クライアントのルーティングテーブルが古い場合という条件もつきます。
+2番目の障害シナリオはほとんど起こらないと言えます。フェイルオーバが起こるだけ長い時間、マスターノードが他の多数派のマスターと通信できないということは、書き込みもできないことを意味します。パーティションが復旧したとしても、他のノードから構成変更を受け入れるために書き込みはしばらくの間拒否されます。この障害シナリオでは、クライアントのルーティングテーブルが古い場合という条件もつきます。
 
 少数派側のパーティションでは、書き込みを失う可能性があるウィンドウがより大きくなります。多数派側のマスターがフェイルオーバした場合には、すべてのマスターへの書き込みが失われる可能性があります。このとき少数派のマスターにひとつ以上のクライアントが接続していたとすると、少なくない数の書き込みが失われるでしょう。
 
@@ -110,7 +110,7 @@ Redisクラスターの主な構成概要
 
 キー空間はハッシュされて 16384スロットに分割されるので、最大でクラスターは 16384ノードのマスターを持つことができます（しかし、ノード数は最大でも 1000程度までにしておくことをお勧めする）。
 
-各マスターノードは 16384スロットの一部を受け持つ。クラスターは再設定が進行中でないときは**安定している**と言える（ここで再設定とは、例えばひとつのノードから他のノードへスロットが移動することである）。クラスターが安定した状態であれば、ひとつのスロットは単一のノードで処理される（しかしながら、ネットワークの分断や障害の発生時、古いデータの読み込みを許容できるのであれば、読み込みが継続できるようひとつ以上のスレーブによって置き換えることができます）。
+各マスターノードは 16384スロットの一部を受け持つ。クラスターは再構成が進行中でないときは**安定している**と言える（ここで再構成とは、例えばひとつのノードから他のノードへスロットが移動すること）。クラスターが安定した状態であれば、ひとつのスロットは単一のノードで処理される（しかしながら、ネットワークの分断や障害の発生時、古いデータの読み込みを許容できるのであれば、読み込みが継続できるようひとつ以上のスレーブによって置き換えることができます）。
 
 基礎となるアルゴリズムは、以下のような形でハッシュのスロットをキーにマッピングします（このルールの例外であるハッシュタグは次の章で扱います）。
 
@@ -202,9 +202,9 @@ C example code:
 ノードは設定ファイルに ID を保存し、設定ファイルをシステム管理者が削除するか、あるいは`CLUSTER RESET` コマンドによって*ハードリセット*されるまで、その後ずっと同じ ID が使われます。
 
 ノードの ID はクラスターの中でノードを特定するためのものです。
-ノードは ID を変えることなく、IPアドレスを変化させることができます。クラスターはバス上でゴシッププロトコルを用いて、IP やポート、設定値の変化を検出します。
+ノードは ID を変えることなく、IPアドレスを変化させることができます。クラスターはバス上でゴシッププロトコルを用いて、IP やポート、構成の変化を検出します。
 
-ID が各ノードに割り当てられた唯一の情報というわけではありませんが、常に一定の値を示すものは他にありません。各ノードは後述するように幾つかの情報も持ちます。いくつかは、特定のノードに関する設定の詳細に関するもので、クラスタの中で一貫した値となっています。その他、ノードの監視情報などは各ノードがローカルに保持します。
+ID が各ノードに割り当てられた唯一の情報というわけではありませんが、常に一定の値を示すものは他にありません。各ノードは後述するように幾つかの情報も持ちます。いくつかは、特定のノードに関する詳細に関するもので、クラスタの中で一貫した値となっています。その他、ノードの監視情報などは各ノードがローカルに保持します。
 
 すべてのノードは、クラスター内で認識している他のノードに関する情報も持ちます。ノードID、IPアドレスやポート、フラグセット、`slave` フラグの場合はどれがマスターか、最後に ping された時間および pong を受け取った時間、現在の*エポック設定*（これはあとで説明します）、接続の状態、最終的に割り当てられたスロットなどです。
 
@@ -234,24 +234,24 @@ ID が各ノードに割り当てられた唯一の情報というわけでは�
 クラスターのトポロジー
 ---
 
-Redisクラスターはフルメッシュ構造であり、TCPコネクションを用いてすべてのノードがそぞれ、すべての他のノードに接続します。
+Redisクラスターはフルメッシュ構造であり、TCPコネクションを用いて各ノードはそれぞれ他のすべてのノードに接続します。
 
-Nノードの構成を考えるとき、すべてのノードは N-1 の外向きの TCPコネクションと同時に N-1 の内向きのコネクションも持ちます。
+Nノードの構成を考えるとき、すべてのノードは N-1 の外向きの TCPコネクションと同時に N-1 の被接続のコネクションも持ちます。
 
 これらの TCPコネクションは必要に応じて作られるのではなく、常に維持されます。
 
 ノードは、クラスターバス上で ping に対して pong を返すのですが、このとき疎通性が失われたことを検知するために長い時間待つのではなく、もう一度コネクションを張り直すことを試します。
 
-**ノードは通常通りに動いているときに多数のメッセージを交換することを避け、代わりにゴシッププロトコルで設定をアップデートする仕組みを用いる**ので、フルメッシュのコネクションを保持していても、交換されるメッセージが指数関数的に増大することはありません。
+**ノードは通常通りに動いているときに多数のメッセージを交換することを避け、代わりにゴシッププロトコルで構成をアップデートする仕組みを用いる**ので、フルメッシュのコネクションを保持していても、交換されるメッセージが指数関数的に増大することはありません。
 
 
 ノードのハンドシェイク
 ---
 
-ノードはクラスターバス上のポートで常にコネクションを受け入れていて、たとえ ping 先のノードが信頼されていないものであったとしても、ping を受け取れば応答を返す。
-しかし、パケットを受信したノードがクラスターに所属していない場合、そのパケットは破棄される。
+ノードはクラスターバス上のポートで常にコネクションを受け入れていて、たとえ通信先のノードが信頼されていないものであったとしても、ping を受け取れば応答を返す。
+しかし、パケットを受信したノードがクラスターに所属していない場合、そのパケットは破棄されます。
 
-ノードは以下の方法でのみ他のノードをクラスターの一部として扱う。
+ノードは以下の方法でのみ他のノードをクラスターの一部として扱います。
 
 * `MEET` メッセージを表明すること。このメッセージは `PING` と同じようなものではあるものの、受け取ったノードは、このメッセージによってクラスターの一部であることを認識する。ノードはシステムの管理者が以下のコマンドを実行した**ときにのみ** `MEET`メッセージを送出する。
 
@@ -278,7 +278,7 @@ Redisクライアントは、スレーブノードも含めてすべてのノー
     -MOVED 3999 127.0.0.1:6381
 
 このエラーには、キーのスロット（3999）およびクエリを処理すべき IPアドレスとポートの組が含まれている。クライアントは指定されたアドレスとポートに対し、もう一度クエリを投げる必要がある。
-留意すべき点として、クライアント川でクエリを他のノードに再送する段階で時間を要し、そのときにクラスターの設定が変わってしまった場合、再送した先のノードが再度 MOVEDエラーを返す可能性がある。また、最初に通信したノードが最新の情報を持っていないケースでも同じような事象が起こりうる。
+留意すべき点として、クライアント側でクエリを他のノードに再送する段階で時間を要し、その間にクラスターの構成が変わってしまった場合、再送した先のノードが再度 MOVEDエラーを返す可能性がある。また、最初に通信したノードが最新の情報を持っていないケースでも同じような事象が起こりうる。
 
 したがって、クラスターのノードから見た視点では ID によって各ノードが識別されますが、スロットとノードのマッピングを返すことでインターフェイスを簡略化しようとしています。
 
@@ -286,34 +286,25 @@ Redisクライアントは、スレーブノードも含めてすべてのノー
 
 加えて、MOVED のリダイレクトが発生した時に `CLUSTER NODES` あるいは `CLUSTER SLOTS`コマンドでクライアント側のクラスターレイアウトを丸ごとリフレッシュすることも考えられます。リダイレクトが発生するときには 1つではなく複数のスロットが再割り当てされたと考えられますので、速やかに情報を更新することはほとんどの場合でベストな戦略です。
 
-なお、クラスターが安定状態（実施中の変更がない）のときは、最終的にすべてのクライアントがスロットとノードのマッピングを保持し、効率的に、リダイレクトすることなく直接ノードにアクセスし、余分な経路や単一障害点を取り除くことができるでしょう、
+なお、クラスターが安定状態（実施中の変更がない）のときは、最終的にすべてのクライアントがスロットとノードのマッピングを保持し、効率的に、リダイレクトすることなく直接ノードにアクセスし、これによって余分な経路や単一障害点を取り除くことができるでしょう、
 
 クライアントは後述するように **-ASKリダイレクションを正しく取り扱わなくてはいけません**。そうでない場合、Redisクラスターに対応したクライアントとは言えません。
 
 
-Cluster live reconfiguration
+クラスターのオンライン再構成
 ---
 
-Redis Cluster supports the ability to add and remove nodes while the cluster
-is running. Adding or removing a node is abstracted into the same
-operation: moving a hash slot from one node to another. This means
-that the same basic mechanism can be used in order to rebalance the cluster, add
-or remove nodes, and so forth.
+Redisクラスターはオンラインでノードを追加したり削除することができます。追加も削除も、突き詰めれば同じ操作で、とあるノードから別のノードへスロットの割り当てを移動するということです。クラスター内のスロットをリバランス（再割り当て）する場合と同様、基本的な仕組みという意味では、ノード追加も削除も同じ方法を用いています。
 
-* To add a new node to the cluster an empty node is added to the cluster and some set of hash slots are moved from existing nodes to the new node.
-* To remove a node from the cluster the hash slots assigned to that node are moved to other existing nodes.
-* To rebalance the cluster a given set of hash slots are moved between nodes.
+* 新しくノードを追加するためには、空のノードを追加し、クラスターが既存のノードから幾つかのスロットを移動させます。
+* ノードの削除では、割り当てられたスロットを他のノードに移動させます。
+* リバランスでは、スロットがノード間で移動します。
 
-The core of the implementation is the ability to move hash slots around.
-From a practical point of view a hash slot is just a set of keys, so
-what Redis Cluster really does during *resharding* is to move keys from
-an instance to another instance. Moving a hash slot means moving all the keys
-that happen to hash into this hash slot.
+この実装の中核は、スロットを移動させる機能と言えます。より実用的な観点からは、スロットはつまりキーの集合なので、クラスターが実施していることはキーの移動ということになります。スロットの移動とは、スロットにマッピングされるハッシュ値に関するキーすべてを移動させることです。
 
-To understand how this works we need to show the `CLUSTER` subcommands
-that are used to manipulate the slots translation table in a Redis Cluster node.
+この挙動を理解するために、ノードにおけるスロットのマッピングテーブルを操作するための `CLUSTER` のサブコマンドを見ていきましょう。
 
-The following subcommands are available (among others not useful in this case):
+以下のサブコマンドが利用できます（特にこのケースで役に立つわけでは無いが）。
 
 * `CLUSTER ADDSLOTS` slot1 [slot2] ... [slotN]
 * `CLUSTER DELSLOTS` slot1 [slot2] ... [slotN]
@@ -321,84 +312,43 @@ The following subcommands are available (among others not useful in this case):
 * `CLUSTER SETSLOT` slot MIGRATING node
 * `CLUSTER SETSLOT` slot IMPORTING node
 
-The first two commands, `ADDSLOTS` and `DELSLOTS`, are simply used to assign
-(or remove) slots to a Redis node. Assigning a slot means to tell a given
-master node that it will be in charge of storing and serving content for
-the specified hash slot.
+最初の 2つのコマンド `ADDSLOTS` と `DELSLOTS` は、単純にスロットを割り当て（もしくは除去）するために使われる。スロットの割り当てとは、指定されたスロットに関する情報を保持しつつ応答するよう、マスターノードに指示を出すもの。
 
-After the hash slots are assigned they will propagate across the cluster
-using the gossip protocol, as specified later in the
-*configuration propagation* section.
+スロットがアサインされたら、構成の伝達セクションで後述するように、ゴシッププロトコルでそれを周知する。
 
-The `ADDSLOTS` command is usually used when a new cluster is created
-from scratch to assign each master node a subset of all the 16384 hash
-slots available.
+`ADDSLOTS` は多くの場合、新しいクラスターがゼロから作られたときに各マスターで 16384種類のスロットを割り当てるときに使われる。
 
-The `DELSLOTS` is mainly used for manual modification of a cluster configuration
-or for debugging tasks: in practice it is rarely used.
+`DELSLOTS` は主に手動によるクラスターの構成変更、あるいは実際にはまれだと思うが、デバッグ用途でも使われる。
 
-The `SETSLOT` subcommand is used to assign a slot to a specific node ID if
-the `SETSLOT <slot> NODE` form is used. Otherwise the slot can be set in the
-two special states `MIGRATING` and `IMPORTING`. Those two special states
-are used in order to migrate a hash slot from one node to another.
+`SELSLOT` サブコマンドは、`SELSLOT <slot> NODE` のような形で用いるが、特定の ID のノードにスロットを割り当てるときに使われる。その他、ノードは 2つの特別なステータス `MIGRATING` と `IMPORTING` になることがある。これらの 2つのステータスはスロットを移動するときにみられる。
 
-* When a slot is set as MIGRATING, the node will accept all queries that
-are about this hash slot, but only if the key in question
-exists, otherwise the query is forwarded using a `-ASK` redirection to the
-node that is target of the migration.
-* When a slot is set as IMPORTING, the node will accept all queries that
-are about this hash slot, but only if the request is
-preceded by an `ASKING` command. If the `ASKING` command was not given
-by the client, the query is redirected to the real hash slot owner via
-a `-MOVED` redirection error, as would happen normally.
+* スロットが MIGRATING になっているとき、ノードはキーが存在する限りスロットに関するすべてのクエリを受け付けるが、そうでない場合は `-ASK` リダイレクションとして応答し、移動先のノードを返す。
+* スロットが IMPORTING のとき、ノードはスロットに関して `ASKING` コマンドで行われたクエリに応答します。もしクライアントが `ASKING` コマンドで呼び出していない場合、クエリは通常と同じように、`-MOVED` エラーで実際にスロットが割り当てられたノードにリダイレクトさせる。
 
-Let's make this clearer with an example of hash slot migration.
-Assume that we have two Redis master nodes, called A and B.
-We want to move hash slot 8 from A to B, so we issue commands like this:
+この動作を明確にするために、以下の例を考えましょう。今ここに 2つのマスターノードが存在するとして、それぞれを A, B と呼びます。ここでは 8番のスロットを A から B に移動させるとします。このときは以下のようなコマンドを実行します。
 
-* We send B: CLUSTER SETSLOT 8 IMPORTING A
-* We send A: CLUSTER SETSLOT 8 MIGRATING B
+* Bに対して: CLUSTER SETSLOT 8 IMPORTING A
+* Aに対して: CLUSTER SETSLOT 8 MIGRATING B
 
-All the other nodes will continue to point clients to node "A" every time
-they are queried with a key that belongs to hash slot 8, so what happens
-is that:
+すべての他のノードは、引き続き 8番のスロットに関するクエリはすべてノード "A" にリダイレクトさせます。つまり、以下のようになります。
 
-* All queries about existing keys are processed by "A".
-* All queries about non-existing keys in A are processed by "B", because "A" will redirect clients to "B".
+* 既存のキーに対するすべてのクエリはノード "A" で実行される
+* 存在しないキーに対するクエリはすべてノード "B" で処理される。なぜなら "A" が "B" にリダイレクトさせるため。
 
-This way we no longer create new keys in "A".
-In the meantime, a special program called `redis-trib` used during reshardings
-and Redis Cluster configuration will migrate existing keys in
-hash slot 8 from A to B.
-This is performed using the following command:
+この方式では、ノードA に新しいキーが作られることはありません。この間、`redis-trib` と呼ばれる特別なプログラムがリシャーディングとクラスターの構成変更を行い、8番のスロットに関する既存のキーをノード間（A から B へ）で移動させます。これには以下のようなコマンドを使います。
 
     CLUSTER GETKEYSINSLOT slot count
 
-The above command will return `count` keys in the specified hash slot.
-For every key returned, `redis-trib` sends node "A" a `MIGRATE` command, that
-will migrate the specified key from A to B in an atomic way (both instances
-are locked for the time (usually very small time) needed to migrate a key so
-there are no race conditions). This is how `MIGRATE` works:
+上記のコマンドでは `count` キーを取得します。すべてのキーが返ってくると、`redis-trib` はノード "A" に `MIGRATE` コマンドを送信し、それによって A から B へのキーの移行はアトミックに行われる（両方のインスタンスはほとんどの場合で非常に短い時間ではあるがロックされ、その間に競合が発生しないようにキーが移行される）。`MIGRATE` は以下のように動作します。
 
     MIGRATE target_host target_port key target_database id timeout
 
-`MIGRATE` will connect to the target instance, send a serialized version of
-the key, and once an OK code is received, the old key from its own dataset
-will be deleted. From the point of view of an external client a key exists
-either in A or B at any given time.
+`MIGRATE` のときは対象のインスタンスに接続を行い、順次キーを送信します。OK が返ってきたら、古いキーを削除します。外部のクライアントから見たとき、キーは A と B どちらかに存在するということになります。
 
-In Redis Cluster there is no need to specify a database other than 0, but
-`MIGRATE` is a general command that can be used for other tasks not
-involving Redis Cluster.
-`MIGRATE` is optimized to be as fast as possible even when moving complex
-keys such as long lists, but in Redis Cluster reconfiguring the
-cluster where big keys are present is not considered a wise procedure if
-there are latency constraints in the application using the database.
+Redisクラスターではデータベースを 0 以外で指定する必要はありません。しかし `MIGRATE` は一般的なコマンドであり Redisクラスター以外のタスクでも必要とされます。`MIGRATE` は長いリストのような複雑なキーであっても、可能な限り高速に動作するよう最適化されています。しかし、アプリケーションからデータベースを見たときにレイテンシの制約がある場合、大きなキーを含む場合にクラスターの再構成を行うことは賢明とは言えません。
 
-When the migration process is finally finished, the `SETSLOT <slot> NODE <node-id>` command is sent to the two nodes involved in the migration in order to
-set the slots to their normal state again. The same command is usually
-sent to all other nodes to avoid waiting for the natural
-propagation of the new configuration across the cluster.
+移行のプロセスが完了したとき、`SETSLOT <slot> NODE <node-id>` コマンドは 2つのノードに対し、通常の状態に戻るよう完了を伝えます。同じコマンドが、新しい再構成の自然な伝播を待たずに全ノードに送信されます。
+
 
 ASK redirection
 ---
