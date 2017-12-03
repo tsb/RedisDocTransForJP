@@ -339,89 +339,59 @@ Redisクラスターはオンラインでノードを追加したり削除する
 
     CLUSTER GETKEYSINSLOT slot count
 
-上記のコマンドでは `count` キーを取得します。すべてのキーが返ってくると、`redis-trib` はノード "A" に `MIGRATE` コマンドを送信し、それによって A から B へのキーの移行はアトミックに行われる（両方のインスタンスはほとんどの場合で非常に短い時間ではあるがロックされ、その間に競合が発生しないようにキーが移行される）。`MIGRATE` は以下のように動作します。
+上記のコマンドでは `count` のキーを取得します。すべてのキーが返ってくると、`redis-trib` はノード "A" に `MIGRATE` コマンドを送信し、それによって A から B へのキーの移行はアトミックに行われます（両方のインスタンスで、ほとんどの場合で非常に短い時間ではあるがロックされ、その間に競合が発生しないようにキーが移行される）。`MIGRATE` は以下のように動作します。
 
     MIGRATE target_host target_port key target_database id timeout
 
-`MIGRATE` のときは対象のインスタンスに接続を行い、順次キーを送信します。OK が返ってきたら、古いキーを削除します。外部のクライアントから見たとき、キーは A と B どちらかに存在するということになります。
+`MIGRATE` のときは対象のインスタンスに接続を行い、順次キーを送信します。OK が返ってきたら、古いキーを削除します。外部のクライアントから見たとき、キーは A か B どちらかに存在するということになります。
 
 Redisクラスターではデータベースを 0 以外で指定する必要はありません。しかし `MIGRATE` は一般的なコマンドであり Redisクラスター以外のタスクでも必要とされます。`MIGRATE` は長いリストのような複雑なキーであっても、可能な限り高速に動作するよう最適化されています。しかし、アプリケーションからデータベースを見たときにレイテンシの制約がある場合、大きなキーを含む場合にクラスターの再構成を行うことは賢明とは言えません。
 
 移行のプロセスが完了したとき、`SETSLOT <slot> NODE <node-id>` コマンドは 2つのノードに対し、通常の状態に戻るよう完了を伝えます。同じコマンドが、新しい再構成の自然な伝播を待たずに全ノードに送信されます。
 
 
-ASK redirection
+ASKリダイレクション
 ---
 
-In the previous section we briefly talked about ASK redirection. Why can't
-we simply use MOVED redirection? Because while MOVED means that
-we think the hash slot is permanently served by a different node and the
-next queries should be tried against the specified node, ASK means to
-send only the next query to the specified node.
+前章で ASKリダイレクションについて触れました。なぜ単純な MOVEDリダイレクションだけではダメなのでしょうか。それは、MOVED が永続的に異なるノードでスロットが提供されることを示すものであり、その次のクエリは指定されたノードに送出されるべきである。ASK は指定されたノードに次のクエリを送るというだけものです。
 
-This is needed because the next query about hash slot 8 can be about a
-key that is still in A, so we always want the client to try A and
-then B if needed. Since this happens only for one hash slot out of 16384
-available, the performance hit on the cluster is acceptable.
+例えば、あるキーに関する 8番のスロットが A に存在していたとすると、クライアントは常に A に問い合わせを行い、必要に応じて B にも行う。この事象は 16384スロットのうち同時に 1つしか起こらないので、パフォーマンスへの影響は限定的で許容範囲と言えるだろう。
 
-We need to force that client behavior, so to make sure
-that clients will only try node B after A was tried, node B will only
-accept queries of a slot that is set as IMPORTING if the client sends the
-ASKING command before sending the query.
+クライアントの挙動について、必ずノード A にアクセスしてからノード B への試行を行うようにしなくてはならない。クライアントはクエリを送る前に ASKING コマンドを送出し、このときノード B は IMPORTING になっているスロットでのみ対応できる。
 
-Basically the ASKING command sets a one-time flag on the client that forces
-a node to serve a query about an IMPORTING slot.
+基本的に ASKING コマンドは IMPORTING になっているスロットへのクエリに対し、1度きりのフラグという性質を持つ。
 
-The full semantics of ASK redirection from the point of view of the client is as follows:
+クライアントから見た時の、ASKリダイレクションの性質は以下の通りだ。
 
-* If ASK redirection is received, send only the query that was redirected to the specified node but continue sending subsequent queries to the old node.
-* Start the redirected query with the ASKING command.
-* Don't yet update local client tables to map hash slot 8 to B.
+* ASKリダイレクションを受け取ったら、指定されたノードに対し、そのクエリだけをリダイレクトさせる。ただし、後続のクエリは引き続き古いノードに送る。
+* ASKING コマンドを添えてリダイレクトのクエリを送る。
+* ローカルに保持しているマッピングテーブルは更新しない。
 
-Once hash slot 8 migration is completed, A will send a MOVED message and
-the client may permanently map hash slot 8 to the new IP and port pair.
-Note that if a buggy client performs the map earlier this is not
-a problem since it will not send the ASKING command before issuing the query,
-so B will redirect the client to A using a MOVED redirection error.
+スロットの移行が完了したら、ノード A は MOVEDメッセージを返し、クライアントはマッピングテーブルを更新することになる。例を挙げれば、8番のスロットに対し新しい IPアドレスとポートの組を割り当てて返すということだ。
+なお、もしクライアントに不具合がありマッピングを意図したよりも早く更新してしまった場合、ASKING コマンドを送らないので問題になることは無いが、ノード B はクライアントにノード A への MOVEDリダイレクションエラーを返す。
 
-Slots migration is explained in similar terms but with different wording
-(for the sake of redundancy in the documentation) in the `CLUSTER SETSLOT`
-command documentation.
+スロットの移行は似たような内容になるが、異なる形で `CLUSTER SETSLOT`コマンドのドキュメントでも解説している。
 
-Clients first connection and handling of redirections
+
+クライアントにおける初回のコネクションとリダイレクションの扱い
 ---
 
-While it is possible to have a Redis Cluster client implementation that does not
-remember the slots configuration (the map between slot numbers and addresses of
-nodes serving it) in memory and only works by contacting random nodes waiting to
-be redirected, such a client would be very inefficient.
+もちろん、クライアントの実装としてスロットに関する構成（スロットとノードのマッピング）をメモリに記憶せず、リダイレクトされることを期待してランダムなノードに接続するといった実装は可能だが、極めて非効率だ。
 
-Redis Cluster clients should try to be smart enough to memorize the slots
-configuration. However this configuration is not *required* to be up to date.
-Since contacting the wrong node will simply result in a redirection, that
-should trigger an update of the client view.
+クライアントはスマートに処理を行うため、スロットの構成を記憶しておくべきだ。しかし、この構成は *必ずしも* 最新であるとは言えない。間違ったノードにアクセスした場合、リダイレクトが返ってくるだけなので、クライアント側から見て情報をアップデートするトリガーとして考えよう。
 
-Clients usually need to fetch a complete list of slots and mapped node
-addresses in two different situations:
+クライアントは以下のようなシナリオで、スロットとノード全体のマッピングのリストを取得することになる。
 
-* At startup in order to populate the initial slots configuration.
-* When a `MOVED` redirection is received.
+* 起動時、スロットの構成を初期化するため
+* `MOVED`リダイレクションが返ってきたとき
 
-Note that a client may handle the `MOVED` redirection by updating just the
-moved slot in its table, however this is usually not efficient since often
-the configuration of multiple slots is modified at once (for example if a
-slave is promoted to master, all the slots served by the old master will
-be remapped). It is much simpler to react to a `MOVED` redirection by
-fetching the full map of slots to nodes from scratch.
+ここでクライアントは `MOVED`リダイレクションが返ってきたスロットだけを更新することもできる。ただし、たいていの場合は複数のスロットが一度に変更される（たとえばスレーブがマスターに昇格したとき、古いマスターに割り当てられたスロットがすべて移動する）。こうした点を考えて、`MOVED`リダイレクションが返ってきたときにはゼロベースで全体のマッピングを更新するように実装した方が、より簡単だろう。
 
-In order to retrieve the slots configuration Redis Cluster offers
-an alternative to the `CLUSTER NODES` command that does not
-require parsing, and only provides the information strictly needed to clients.
+スロットの構成を取得するとき、Redisクラスターはパースを必要としない `CLUSTER NODES`コマンドの代わりに、クライアントにとって本当に必要な情報だけを返します。
 
-The new command is called `CLUSTER SLOTS` and provides an array of slots
-ranges, and the associated master and slave nodes serving the specified range.
+この新しいコマンドは `CLUSTER SLOTS` と呼ばれ、スロットの範囲の、その範囲に割り当てられたマスタおよびスレーブノード、といった情報を配列で返します。
 
-The following is an example of output of `CLUSTER SLOTS`:
+以下が `CLUSTER SLOTS` の実行例です。
 
 ```
 127.0.0.1:7000> cluster slots
@@ -445,25 +415,14 @@ The following is an example of output of `CLUSTER SLOTS`:
       2) (integer) 7005
 ```
 
-The first two sub-elements of every element of the returned array are the
-start-end slots of the range. The additional elements represent address-port
-pairs. The first address-port pair is the master serving the slot, and the
-additional address-port pairs are all the slaves serving the same slot
-that are not in an error condition (i.e. the FAIL flag is not set).
+すべての応答の中で、はじめの 2つのサブ要素はスロットの範囲の開始と終了を示します。続いて、アドレスとポートの組です。最初の組はマスター、続く残りの組は同じスロットに割り当てられたスレーブノードです。エラーとなっているスロット（FAILフラグがセットされている等）は含まれません。
 
-For example the first element of the output says that slots from 5461 to 10922
-(start and end included) are served by 127.0.0.1:7001, and it is possible
-to scale read-only load contacting the slave at 127.0.0.1:7004.
+例えば一番最初を見ると、スロットとして 5461 - 10922 が返され（これが開始と終了）、127.0.0.1:7001 がマスターになっています。また、スレーブは 127.0.0.1:7004 であり、これはリードオンリーでアクセスできます。
 
-`CLUSTER SLOTS` is not guaranteed to return ranges that cover the full
-16384 slots if the cluster is misconfigured, so clients should initialize the
-slots configuration map filling the target nodes with NULL objects, and
-report an error if the user tries to execute commands about keys
-that belong to unassigned slots.
+`CLUSTER SLOTS`は 16384 のスロットすべてを応答に含めることは保証していません。クラスターに何らか問題がある場合、クライアントがマッピングテーブルを初期化するときには NULLオブジェクトで埋められます。その上で、ユーザがそのスロットに対するコマンドを実行しようとしたとき、エラーとして報告します。
 
-Before returning an error to the caller when a slot is found to
-be unassigned, the client should try to fetch the slots configuration
-again to check if the cluster is now configured properly.
+このような場合、クライアントはそのままスロットが未割り当てであることをエラーとして報告する前に、スロットの構成が修正されている可能性を考慮し、再度構成情報を取得できないか試行するべきです。
+
 
 Multiple keys operations
 ---
