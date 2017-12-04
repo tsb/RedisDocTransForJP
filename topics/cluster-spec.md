@@ -347,21 +347,21 @@ Redisクラスターはオンラインでノードを追加したり削除する
 
 Redisクラスターではデータベースを 0 以外で指定する必要はありません。しかし `MIGRATE` は一般的なコマンドであり Redisクラスター以外のタスクでも必要とされます。`MIGRATE` は長いリストのような複雑なキーであっても、可能な限り高速に動作するよう最適化されています。しかし、アプリケーションからデータベースを見たときにレイテンシの制約がある場合、大きなキーを含む場合にクラスターの再構成を行うことは賢明とは言えません。
 
-移行のプロセスが完了したとき、`SETSLOT <slot> NODE <node-id>` コマンドは 2つのノードに対し、通常の状態に戻るよう完了を伝えます。同じコマンドが、新しい再構成の自然な伝播を待たずに全ノードに送信されます。
+移行のプロセスが完了したとき、`SETSLOT <slot> NODE <node-id>` コマンドは 2つのノードに対し、通常の状態に戻るよう完了を伝えます。同じコマンドが、新しい構成の自然な伝播を待たずに全ノードに送信されます。
 
 
 ASKリダイレクション
 ---
 
-前章で ASKリダイレクションについて触れました。なぜ単純な MOVEDリダイレクションだけではダメなのでしょうか。それは、MOVED が永続的に異なるノードでスロットが提供されることを示すものであり、その次のクエリは指定されたノードに送出されるべきである。ASK は指定されたノードに次のクエリを送るというだけものです。
+前章で ASKリダイレクションについて触れました。なぜ単純な MOVEDリダイレクションだけではダメなのでしょうか。それは、MOVED が永続的に異なるノードでスロットが提供されることを示すものであり、その次のクエリは指定されたノードに送出されるべきだからです。ASK は指定されたノードに次のクエリを送るというだけものです。
 
-例えば、あるキーに関する 8番のスロットが A に存在していたとすると、クライアントは常に A に問い合わせを行い、必要に応じて B にも行う。この事象は 16384スロットのうち同時に 1つしか起こらないので、パフォーマンスへの影響は限定的で許容範囲と言えるだろう。
+例えば、あるキーに関する 8番のスロットが A に存在していたとすると、クライアントは常に A に問い合わせを行い、必要に応じて B にも行います。この事象は 16384スロットのうち同時に 1つしか起こらないので、パフォーマンスへの影響は限定的で許容範囲と言えるでしょう。
 
-クライアントの挙動について、必ずノード A にアクセスしてからノード B への試行を行うようにしなくてはならない。クライアントはクエリを送る前に ASKING コマンドを送出し、このときノード B は IMPORTING になっているスロットでのみ対応できる。
+クライアントの挙動について、必ずノード A にアクセスしてからノード B への試行を行うようにしなくてはなりません。クライアントはクエリを送る前に ASKING コマンドを送出し、このときノード B は IMPORTING になっているスロットでのみ対応できます。
 
-基本的に ASKING コマンドは IMPORTING になっているスロットへのクエリに対し、1度きりのフラグという性質を持つ。
+基本的に ASKING コマンドは IMPORTING になっているスロットへのクエリに対し、1度きりのフラグという性質を持ちます。
 
-クライアントから見た時の、ASKリダイレクションの性質は以下の通りだ。
+クライアントから見た時の、ASKリダイレクションの性質は以下の通りです。
 
 * ASKリダイレクションを受け取ったら、指定されたノードに対し、そのクエリだけをリダイレクトさせる。ただし、後続のクエリは引き続き古いノードに送る。
 * ASKING コマンドを添えてリダイレクトのクエリを送る。
@@ -376,9 +376,9 @@ ASKリダイレクション
 クライアントにおける初回のコネクションとリダイレクションの扱い
 ---
 
-もちろん、クライアントの実装としてスロットに関する構成（スロットとノードのマッピング）をメモリに記憶せず、リダイレクトされることを期待してランダムなノードに接続するといった実装は可能だが、極めて非効率だ。
+もちろん、クライアントの実装としてスロットに関する構成（スロットとノードのマッピング）をメモリに記憶せず、リダイレクトされることを期待してランダムなノードに接続するといった実装は可能だが、極めて非効率です。
 
-クライアントはスマートに処理を行うため、スロットの構成を記憶しておくべきだ。しかし、この構成は *必ずしも* 最新であるとは言えない。間違ったノードにアクセスした場合、リダイレクトが返ってくるだけなので、クライアント側から見て情報をアップデートするトリガーとして考えよう。
+クライアントはスマートに処理を行うため、スロットの構成を記憶しておくべきでしょう。しかし、この構成は *必ずしも* 最新であるとは言えません。間違ったノードにアクセスした場合、リダイレクトが返ってくるだけなので、クライアント側から見て情報をアップデートするトリガーとして考えるべきです。
 
 クライアントは以下のようなシナリオで、スロットとノード全体のマッピングのリストを取得することになる。
 
@@ -389,7 +389,7 @@ ASKリダイレクション
 
 スロットの構成を取得するとき、Redisクラスターはパースを必要としない `CLUSTER NODES`コマンドの代わりに、クライアントにとって本当に必要な情報だけを返します。
 
-この新しいコマンドは `CLUSTER SLOTS` と呼ばれ、スロットの範囲の、その範囲に割り当てられたマスタおよびスレーブノード、といった情報を配列で返します。
+この新しいコマンドは `CLUSTER SLOTS` と呼ばれ、スロットの範囲、その範囲に割り当てられたマスタおよびスレーブノード、といった情報を配列で返します。
 
 以下が `CLUSTER SLOTS` の実行例です。
 
@@ -415,7 +415,7 @@ ASKリダイレクション
       2) (integer) 7005
 ```
 
-すべての応答の中で、はじめの 2つのサブ要素はスロットの範囲の開始と終了を示します。続いて、アドレスとポートの組です。最初の組はマスター、続く残りの組は同じスロットに割り当てられたスレーブノードです。エラーとなっているスロット（FAILフラグがセットされている等）は含まれません。
+この応答の中で、はじめの 2つのサブ要素はスロットの範囲の開始と終了を示します。続いて、アドレスとポートの組です。最初の組はマスター、続く残りの組は同じスロットに割り当てられたスレーブノードです。エラーとなっているスロット（FAILフラグがセットされている等）は含まれません。
 
 例えば一番最初を見ると、スロットとして 5461 - 10922 が返され（これが開始と終了）、127.0.0.1:7001 がマスターになっています。また、スレーブは 127.0.0.1:7004 であり、これはリードオンリーでアクセスできます。
 
@@ -424,74 +424,59 @@ ASKリダイレクション
 このような場合、クライアントはそのままスロットが未割り当てであることをエラーとして報告する前に、スロットの構成が修正されている可能性を考慮し、再度構成情報を取得できないか試行するべきです。
 
 
-Multiple keys operations
+複数のキーに関する操作
 ---
 
-Using hash tags, clients are free to use multi-key operations.
-For example the following operation is valid:
+ハッシュタグのおかげで、クライアントは複数のキーを扱うことができます。例えば以下のようなことができます。
 
     MSET {user:1000}.name Angela {user:1000}.surname White
 
-Multi-key operations may become unavailable when a resharding of the
-hash slot the keys belong to is in progress.
+ただし、キーが属するスロットがリシャーディングの対象になっている場合、複数のキーを扱えないことがあります。
 
-More specifically, even during a resharding the multi-key operations
-targeting keys that all exist and are all still in the same node (either
-the source or destination node) are still available.
+もう少し詳しく説明すると、リシャーディング中であっても指定したすべてのキーが同じノード上（移動元、移動先、どちらでも）に存在していた場合は、利用することができます。
 
-Operations on keys that don't exist or are - during the resharding - split
-between the source and destination nodes, will generate a `-TRYAGAIN` error.
-The client can try the operation after some time, or report back the error.
+複数のキーを考えた時に、いくつかのキーが存在しない、あるいはリシャーディング中で移動元と移動先に分離している場合、`-TRYAGAIN`エラーが返されます。クライアントは時間を置いてリトライするか、自身もエラーを返すことになります。
 
-As soon as migration of the specified hash slot has terminated, all
-multi-key operations are available again for that hash slot.
+スロットの移行が完了次第、引き続き複数キーに関する操作はまた利用できるようになります。
 
-Scaling reads using slave nodes
+
+スレーブノードを用いて読み込みをスケールさせる
 ---
 
-Normally slave nodes will redirect clients to the authoritative master for
-the hash slot involved in a given command, however clients can use slaves
-in order to scale reads using the `READONLY` command.
+通常、スレーブノードは受け取ったコマンドに基づいて適切なスロットを持つマスターにリダイレクトさせるのですが、クライアントは `READONLY`コマンドを用いてスレーブにアクセスし、読み込みをスケールさせることができます。
 
-`READONLY` tells a Redis Cluster slave node that the client is ok reading
-possibly stale data and is not interested in running write queries.
+`READONLY` はスレーブノードに対し、クライアントが書き込みを行わないこと、多少古いデータであっても許容できるということを伝えるものです。
 
-When the connection is in readonly mode, the cluster will send a redirection
-to the client only if the operation involves keys not served
-by the slave's master node. This may happen because:
+コネクションが読み込み専用であるときは、指定されたキーがスロットに含まれない場合のみリダイレクトを行います。これは以下の場合で発生します。
 
-1. The client sent a command about hash slots never served by the master of this slave.
-2. The cluster was reconfigured (for example resharded) and the slave is no longer able to serve commands for a given hash slot.
+1. そのスレーブのマスターに割り当てられていないスロットに対し、クライアントがコマンドを送った場合
+2. リシャーディングなどで構成が変更されており、以前割り当てられたが移行済みのスロットに対してコマンドが送られた場合
 
-When this happens the client should update its hashslot map as explained in
-the previous sections.
+このときは、前章でも触れたようにクライアントがすぐにスロットのマッピングを更新すべきです。
 
-The readonly state of the connection can be cleared using the `READWRITE` command.
+読み込み専用については、`READWRITE`コマンドを使うと終了することができます。
+
 
 Fault Tolerance
 ===
 
-Heartbeat and gossip messages
+ハートビートとゴシップメッセージ
 ---
 
-Redis Cluster nodes continuously exchange ping and pong packets. Those two kind of packets have the same structure, and both carry important configuration information. The only actual difference is the message type field. We'll refer to the sum of ping and pong packets as *heartbeat packets*.
+ノードは継続的に ping と pong のパケットをやりとりします。これらの 2種類のパケットは同じ構造になっており、いずれも重要な構成情報を含みます。違いはメッセージタイプのフィールドだけです。ここでは ping と pong パケットの総称として *ハートビートパケット* と呼びます。
 
-Usually nodes send ping packets that will trigger the receivers to reply with pong packets. However this is not necessarily true. It is possible for nodes to just send pong packets to send information to other nodes about their configuration, without triggering a reply. This is useful, for example, in order to broadcast a new configuration as soon as possible.
+ノードが ping パケットを送出すると、それをきっかけとして受信側でも pong パケットを送り返します。しかし、これは必ずしも正確ではありません。送り返すのではなく、構成情報を他のノードに送る目的で単に pong パケットを送出することも可能だからです。これは有用な仕組みで、例えば新しい構成情報をいち早く伝える目的で使われます。
 
-Usually a node will ping a few random nodes every second so that the total number of ping packets sent (and pong packets received) by each node is a constant amount regardless of the number of nodes in the cluster.
+ノードはランダムに幾つかのノードに対して毎秒 ping を行います。つまり各ノードから送出される ping パケット数（および応答の pong パケット数）は、クラスター内のノード数に関わらず一定になります。
 
-However every node makes sure to ping every other node that hasn't sent a ping or received a pong for longer than half the `NODE_TIMEOUT` time. Before `NODE_TIMEOUT` has elapsed, nodes also try to reconnect the TCP link with another node to make sure nodes are not believed to be unreachable only because there is a problem in the current TCP connection.
+しかし全てのノードは、ping を送出してきていない、もしくは pong を受け取ってから一定の時間（`NODE_TIMEOUT` の半分）が経過している場合に、それらのノードに ping を送ります。また、経過時間が `NODE_TIMEOUT` に達する前に TCPコネクションの確立を試行します。TCPコネクションに問題が生じたことによって疎通性が失われ、まだ問題を認識されていないだけの可能性があるからです。
 
-The number of messages globally exchanged can be sizable if `NODE_TIMEOUT` is set to a small figure and the number of nodes (N) is very large, since every node will try to ping every other node for which they don't have fresh information every half the `NODE_TIMEOUT` time.
+全体で交換されるメッセージ数は、もし `NODE_TIMEOUT` が小さな値で、かつノード数 N が非常に大きい構成の場合、かなりのものになります。すべてのノードは `NODE_TIMEOUT` の半分の時間が経過する毎に、情報を持ち合わせていないノードすべてに接続を試行することになるからです。
 
-For example in a 100 node cluster with a node timeout set to 60 seconds, every node will try to send 99 pings every 30 seconds, with a total amount of pings of 3.3 per second. Multiplied by 100 nodes, this is 330 pings per second in the total cluster.
+たとえば 100ノードのクラスタでタイムアウト値を 60秒に設定した場合、すべてのノードは 30秒毎におおむね 99 の ping を送出すると考えることができます。これに沿って単純に算出すると、秒間 3.3 の ping が送出される計算になります。100ノードで掛け算し、クラスター全体では秒間 330 の pingメッセージがやりとりされることになります。
 
-There are ways to lower the number of messages, however there have been no
-reported issues with the bandwidth currently used by Redis Cluster failure
-detection, so for now the obvious and direct design is used. Note that even
-in the above example, the 330 packets per second exchanged are evenly
-divided among 100 different nodes, so the traffic each node receives
-is acceptable.
+このメッセージを少なくする方法はいくつかありますが、現在までに帯域幅に関する問題は報告されていないため、簡単で直接的なデザインになっています。上の例を改めて考えても、秒間 330 のパケットは実際のところ 100 ノードに分散しているため、各ノードにおけるトラフィックへの影響は微々たるものと言えるでしょう。
+
 
 Heartbeat packet content
 ---
