@@ -435,7 +435,7 @@ ASKリダイレクション
 
 もう少し詳しく説明すると、リシャーディング中であっても指定したすべてのキーが同じノード上（移動元、移動先、どちらでも）に存在していた場合は、利用することができます。
 
-複数のキーを考えた時に、いくつかのキーが存在しない、あるいはリシャーディング中で移動元と移動先に分離している場合、`-TRYAGAIN`エラーが返されます。クライアントは時間を置いてリトライするか、自身もエラーを返すことになります。
+複数のキーを考えた時に、いくつかのキーが存在しない、あるいはリシャーディング中で移動元と移動先に分離している場合、`-TRYAGAIN`エラーが返されます。クライアントは時間を置いてリトライするか、エラーを返すことになります。
 
 スロットの移行が完了次第、引き続き複数キーに関する操作はまた利用できるようになります。
 
@@ -445,19 +445,19 @@ ASKリダイレクション
 
 通常、スレーブノードは受け取ったコマンドに基づいて適切なスロットを持つマスターにリダイレクトさせるのですが、クライアントは `READONLY`コマンドを用いてスレーブにアクセスし、読み込みをスケールさせることができます。
 
-`READONLY` はスレーブノードに対し、クライアントが書き込みを行わないこと、多少古いデータであっても許容できるということを伝えるものです。
+`READONLY` はスレーブノードに対し、クライアントが書き込みを行わないこと、多少古いデータであっても許容できるということを伝えます。
 
 コネクションが読み込み専用であるときは、指定されたキーがスロットに含まれない場合のみリダイレクトを行います。これは以下の場合で発生します。
 
 1. そのスレーブのマスターに割り当てられていないスロットに対し、クライアントがコマンドを送った場合
-2. リシャーディングなどで構成が変更されており、以前割り当てられたが移行済みのスロットに対してコマンドが送られた場合
+2. リシャーディングなどで構成が変更されており、以前割り当てられていたが移行済みのスロットに対してコマンドが送られた場合
 
-このときは、前章でも触れたようにクライアントがすぐにスロットのマッピングを更新すべきです。
+このときは、前章でも触れたようにクライアントがスロットのマッピングを更新すべきです。
 
 読み込み専用については、`READWRITE`コマンドを使うと終了することができます。
 
 
-Fault Tolerance
+障害耐性（フォールトトレランス）
 ===
 
 ハートビートとゴシップメッセージ
@@ -465,11 +465,11 @@ Fault Tolerance
 
 ノードは継続的に ping と pong のパケットをやりとりします。これらの 2種類のパケットは同じ構造になっており、いずれも重要な構成情報を含みます。違いはメッセージタイプのフィールドだけです。ここでは ping と pong パケットの総称として *ハートビートパケット* と呼びます。
 
-ノードが ping パケットを送出すると、それをきっかけとして受信側でも pong パケットを送り返します。しかし、これは必ずしも正確ではありません。送り返すのではなく、構成情報を他のノードに送る目的で単に pong パケットを送出することも可能だからです。これは有用な仕組みで、例えば新しい構成情報をいち早く伝える目的で使われます。
+ノードが ping パケットを送出すると、それをきっかけとして受信側でも pong パケットを送り返します。しかし、ping は必ずしも必要ではありません。送り返すのではなく、構成情報を他のノードに送る目的で単に pong パケットを送出することも可能だからです。これは有用な仕組みで、例えば新しい構成情報をいち早く伝える目的で使われます。
 
-ノードはランダムに幾つかのノードに対して毎秒 ping を行います。つまり各ノードから送出される ping パケット数（および応答の pong パケット数）は、クラスター内のノード数に関わらず一定になります。
+毎秒、ノードはランダムに幾つかのノードを選び、ping を行います。つまり各ノードから送出される ping パケット数（および応答の pong パケット数）は、クラスター内のノード数に関わらず一定になります。
 
-しかし全てのノードは、ping を送出してきていない、もしくは pong を受け取ってから一定の時間（`NODE_TIMEOUT` の半分）が経過している場合に、それらのノードに ping を送ります。また、経過時間が `NODE_TIMEOUT` に達する前に TCPコネクションの確立を試行します。TCPコネクションに問題が生じたことによって疎通性が失われ、まだ問題を認識されていないだけの可能性があるからです。
+しかし全てのノードは、ping を送出してこない、もしくは pong を受け取ってから一定の時間（`NODE_TIMEOUT` の半分）が経過している場合に、それらのノードに ping を送ります。また、経過時間が `NODE_TIMEOUT` に達する前に TCPコネクションの確立を試行します。TCPコネクションに問題が生じたことによって疎通性が失われ、まだ問題を認識されていない可能性があるからです。
 
 全体で交換されるメッセージ数は、もし `NODE_TIMEOUT` が小さな値で、かつノード数 N が非常に大きい構成の場合、かなりのものになります。すべてのノードは `NODE_TIMEOUT` の半分の時間が経過する毎に、情報を持ち合わせていないノードすべてに接続を試行することになるからです。
 
@@ -478,45 +478,46 @@ Fault Tolerance
 このメッセージを少なくする方法はいくつかありますが、現在までに帯域幅に関する問題は報告されていないため、簡単で直接的なデザインになっています。上の例を改めて考えても、秒間 330 のパケットは実際のところ 100 ノードに分散しているため、各ノードにおけるトラフィックへの影響は微々たるものと言えるでしょう。
 
 
-Heartbeat packet content
+ハートビートパケットの中身
 ---
 
-Ping and pong packets contain a header that is common to all types of packets (for instance packets to request a failover vote), and a special Gossip Section that is specific of Ping and Pong packets.
+ping と pong はすべてのパケット（フェイルオーバのためのパケットなど）に共通するタイプのヘッダーと、特別なゴシップセクションを含んでいます。
 
-The common header has the following information:
+共通のヘッダーは以下のようなものです。
 
-* Node ID, a 160 bit pseudorandom string that is assigned the first time a node is created and remains the same for all the life of a Redis Cluster node.
-* The `currentEpoch` and `configEpoch` fields of the sending node that are used to mount the distributed algorithms used by Redis Cluster (this is explained in detail in the next sections). If the node is a slave the `configEpoch` is the last known `configEpoch` of its master.
-* The node flags, indicating if the node is a slave, a master, and other single-bit node information.
-* A bitmap of the hash slots served by the sending node, or if the node is a slave, a bitmap of the slots served by its master.
-* The sender TCP base port (that is, the port used by Redis to accept client commands; add 10000 to this to obtain the cluster bus port).
-* The state of the cluster from the point of view of the sender (down or ok).
-* The master node ID of the sending node, if it is a slave.
+* ノードID、これは 160ビットの疑似ランダムな文字列でノードが作られたときに一度だけ生成され、以後は不変の値
+* 分散アルゴリズムをマウントするための `currentEpoch` と `configEpoch` フィールド（これについては次の章で説明します）。ノードがスレーブの場合、`configEpoch` はマスターの `configEpoch` と一致します。
+* ノードのフラグ。スレーブ、マスター、あるいは単体ノードなのか
+* ノードが持っているスロットのマッピング。もしスレーブならば、そのスロットのマッピングはマスターが持っているものを意味する。
+* 送出元の TCPポート（ Redis がクライアントのコマンドを受け取るポート。クラスターバス上のポートは 10000 を足す ）
+* 送信者から見た時のクラスターの状態（ダウンもしくはOK）
+* スレーブのとき、送信側ノードにおけるマスターの ID 
 
-Ping and pong packets also contain a gossip section. This section offers to the receiver a view of what the sender node thinks about other nodes in the cluster. The gossip section only contains information about a few random nodes among the set of nodes known to the sender. The number of nodes mentioned in a gossip section is proportional to the cluster size.
+ping と pong のパケットはゴシップセクションも持ち合わせています。このセクションでは、送出元のノードが他のノードをどのように見ているか、読み手に情報を提供します。ゴシップセクションは、全体のうちランダムで選択された、既知の幾つかのノードしか情報を含んでいません。ゴシップセクションに記載されるノード数は、クラスターのサイズに比例します。
 
-For every node added in the gossip section the following fields are reported:
+ゴシップセクションに含まれるノードの情報は、以下のフィールドで構成されます。
 
-* Node ID.
-* IP and port of the node.
-* Node flags.
+* ノードID
+* ノードの IP とポート
+* ノードのフラグ
 
-Gossip sections allow receiving nodes to get information about the state of other nodes from the point of view of the sender. This is useful both for failure detection and to discover other nodes in the cluster.
+ゴシップセクションでは、送信したノードから見た他のノードの状態などを受け取ります。これは障害の検知や他のノードをクラスター内で検出するために用いられます。
 
-Failure detection
+
+障害時の挙動
 ---
 
-Redis Cluster failure detection is used to recognize when a master or slave node is no longer reachable by the majority of nodes and then respond by promoting a slave to the role of master. When slave promotion is not possible the cluster is put in an error state to stop receiving queries from clients.
+Redisクラスターにおける障害の検知とは、特定のマスターあるいはスレーブノードが、多数のノードから見て疎通性が無くなったと判断されたときであり、そのときは必要に応じてスレーブがマスターに昇格します。スレーブの昇格ができないときは、クラスターは状態をエラーに変更し、クエリを受け取らないようにします。
 
-As already mentioned, every node takes a list of flags associated with other known nodes. There are two flags that are used for failure detection that are called `PFAIL` and `FAIL`. `PFAIL` means *Possible failure*, and is a non-acknowledged failure type. `FAIL` means that a node is failing and that this condition was confirmed by a majority of masters within a fixed amount of time.
+すでに述べられているように、各ノードは他のノードのフラグをリストとして持ちます。障害を検出するためのフラグは 2種類あり `PFAIL` と `FAIL` です。`PFAIL` は *障害の可能性がある* ことを示し、未知の障害を意味します。`FAIL` はノードが障害になっており、決められた時間において多数のマスターから確認が行われた結果です。
 
-**PFAIL flag:**
+**PFAIL フラグ**
 
-A node flags another node with the `PFAIL` flag when the node is not reachable for more than `NODE_TIMEOUT` time. Both master and slave nodes can flag another node as `PFAIL`, regardless of its type.
+とあるノードから見たときに特定のノードが `NODE_TIMEOUT` の時間、疎通しないことが確認できると、`PFAIL` フラグを付与します。マスター、スレーブ、それぞれの役割によらず `PFAIL` をつけることができます。
 
-The concept of non-reachability for a Redis Cluster node is that we have an **active ping** (a ping that we sent for which we have yet to get a reply) pending for longer than `NODE_TIMEOUT`. For this mechanism to work the `NODE_TIMEOUT` must be large compared to the network round trip time. In order to add reliability during normal operations, nodes will try to reconnect with other nodes in the cluster as soon as half of the `NODE_TIMEOUT` has elapsed without a reply to a ping. This mechanism ensures that connections are kept alive so broken connections usually won't result in false failure reports between nodes.
+疎通性が無い状態とは、つまり **アクティブな ping**（送信した ping に応答がない状態）が `NODE_TIMEOUT` の時間継続しているということです。この仕組みでは当然、`NODE_TIMEOUT` はネットワークのラウンドトリップタイムより十分大きくなくてはなりません。通常のオペレーションの中で信頼性を保つため、ping に応答がない時間が `NODE_TIMEOUT` の半分に達した時点でノードは接続を再試行します。この仕組みによってコネクションは常に状態が保たれ、異常なコネクションによる誤検知なども起こらないようになっています。
 
-**FAIL flag:**
+**FAIL フラグ**
 
 The `PFAIL` flag alone is just local information every node has about other nodes, but it is not sufficient to trigger a slave promotion. For a node to be considered down the `PFAIL` condition needs to be escalated to a `FAIL` condition.
 
