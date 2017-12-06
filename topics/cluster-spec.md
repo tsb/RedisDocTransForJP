@@ -519,28 +519,28 @@ Redisクラスターにおける障害の検知とは、特定のマスターあ
 
 **FAIL フラグ**
 
-The `PFAIL` flag alone is just local information every node has about other nodes, but it is not sufficient to trigger a slave promotion. For a node to be considered down the `PFAIL` condition needs to be escalated to a `FAIL` condition.
+他のノードに関する `PFAIL` フラグそれ自体については、すべてのノードが持ち合わせている情報ですが、スレーブの昇格を行う根拠にするには少し足りません。ノードがダウンしていると判断するためには、`PFAIL` から `FAIL` への変化が必要です。
 
-As outlined in the node heartbeats section of this document, every node sends gossip messages to every other node including the state of a few random known nodes. Every node eventually receives a set of node flags for every other node. This way every node has a mechanism to signal other nodes about failure conditions they have detected.
+ハートビートの章で触れたように、すべてのノードはランダムに選ばれた幾つかのノードの状態などを含め、ゴシップメッセージを他のノードに対し送出します。すべてのノードは結果として、すべての他のノードのフラグを持つということになります。すべてのノードにおいて、検出された障害を他のノードに伝えることができる仕組みである、と言えるでしょう。
 
-A `PFAIL` condition is escalated to a `FAIL` condition when the following set of conditions are met:
+`PFAIL` は以下の条件を満たしたとき、`FAIL` として判断されます。
 
-* Some node, that we'll call A, has another node B flagged as `PFAIL`.
-* Node A collected, via gossip sections, information about the state of B from the point of view of the majority of masters in the cluster.
-* The majority of masters signaled the `PFAIL` or `FAIL` condition within `NODE_TIMEOUT * FAIL_REPORT_VALIDITY_MULT` time. (The validity factor is set to 2 in the current implementation, so this is just two times the `NODE_TIMEOUT` time).
+* とあるノードを A、`PFAIL` フラグのついたノードを B とする
+* ノードA はゴシップメッセージを通じてノードB に関する状態をまとめ、多くのマスターから見た時にどのような状態であるかを確認する
+* `PFAIL` もしくは `FAIL` が多数派であり、`NODE_TIMEOUT * FAIL_REPORT_VALIDITY_MULT` だけの時間が経過している（現時点の実装では、検証のための値は 2 となっている。つまり、先の式の結果は `NODE_TIMEOUT` の 2倍の値である）
 
-If all the above conditions are true, Node A will:
+これらの条件を満たしたとき、ノードA は
 
-* Mark the node as `FAIL`.
-* Send a `FAIL` message to all the reachable nodes.
+* ノードを `FAIL` とする
+* `FAIL` メッセージを疎通可能なすべてのノードに送る
 
-The `FAIL` message will force every receiving node to mark the node in `FAIL` state, whether or not it already flagged the node in `PFAIL` state.
+`FAIL` メッセージは、状態が `PFAIL` であるか否かに関わらず、受信したすべてのノードにおいて `FAIL` のフラグをセットさせる。。
 
-Note that *the FAIL flag is mostly one way*. That is, a node can go from `PFAIL` to `FAIL`, but a `FAIL` flag can only be cleared in the following situations:
+なお、*FAIL フラグは一方向*である。この意味は、ノードが `PFAIL` から `FAIL` になることはあっても逆はありえず、`FAIL` フラグは幾つかの条件下でクリアされるのみだ、ということである。
 
-* The node is already reachable and is a slave. In this case the `FAIL` flag can be cleared as slaves are not failed over.
-* The node is already reachable and is a master not serving any slot. In this case the `FAIL` flag can be cleared as masters without slots do not really participate in the cluster and are waiting to be configured in order to join the cluster.
-* The node is already reachable and is a master, but a long time (N times the `NODE_TIMEOUT`) has elapsed without any detectable slave promotion. It's better for it to rejoin the cluster and continue in this case.
+* ノードがスレーブであり、疎通可能になっていること。このケースではスレーブであることが条件に含まれているため、フェイルオーバは発生せず、`FAIL` フラグをクリアするだけの結果となる。
+* ノードがマスターではあるもののスロットの割り当てが無く、疎通可能になっていること。この場合は割り当てられたスロットが無いためクラスターに参加していないということであり、`FAIL` フラグは単にクリアされるだけとなる。その後、引き続きクラスターへの参加を待つことになる。
+* ノードがマスターで疎通可能になっているが、しばらくの時間（`NODE_TIMEOUT` かける N ）が経過しており、スレーブの昇格が起こっていない場合。このときはフェイルオーバなどを続けるよりも、クラスターに再加入させた方が良いと判断される。
 
 It is useful to note that while the `PFAIL` -> `FAIL` transition uses a form of agreement, the agreement used is weak:
 
