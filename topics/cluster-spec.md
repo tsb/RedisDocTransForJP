@@ -542,18 +542,20 @@ Redisクラスターにおける障害の検知とは、特定のマスターあ
 * ノードがマスターではあるもののスロットの割り当てが無く、疎通可能になっていること。この場合は割り当てられたスロットが無いためクラスターに参加していないということであり、`FAIL` フラグは単にクリアされるだけとなる。その後、引き続きクラスターへの参加を待つことになる。
 * ノードがマスターで疎通可能になっているが、しばらくの時間（`NODE_TIMEOUT` かける N ）が経過しており、スレーブの昇格が起こっていない場合。このときはフェイルオーバなどを続けるよりも、クラスターに再加入させた方が良いと判断される。
 
-It is useful to note that while the `PFAIL` -> `FAIL` transition uses a form of agreement, the agreement used is weak:
+`PFAIL` から `FAIL` への変化においては、弱い合意の形を取る。
 
-1. Nodes collect views of other nodes over some time period, so even if the majority of master nodes need to "agree", actually this is just state that we collected from different nodes at different times and we are not sure, nor we require, that at a given moment the majority of masters agreed. However we discard failure reports which are old, so the failure was signaled by the majority of masters within a window of time.
-2. While every node detecting the `FAIL` condition will force that condition on other nodes in the cluster using the `FAIL` message, there is no way to ensure the message will reach all the nodes. For instance a node may detect the `FAIL` condition and because of a partition will not be able to reach any other node.
+1. ノードは、他のノードから見た情報を集め、多くのノードから "合意" が取れれば、それはつまり異なるノード、異なる時間における確認の結果ということになるので、より多くのマスターが合意したとみなす。しかしながら、障害は一定の時間枠を設けて多数のノードが合意することで検知するデザインになっているので、個別の障害の通知が古くなったときには破棄される。
 
-However the Redis Cluster failure detection has a liveness requirement: eventually all the nodes should agree about the state of a given node. There are two cases that can originate from split brain conditions. Either some minority of nodes believe the node is in `FAIL` state, or a minority of nodes believe the node is not in `FAIL` state. In both the cases eventually the cluster will have a single view of the state of a given node:
+2. すべてのノードは `FAIL` を認識したとき、他のノードすべてに `FAIL` メッセージを通知する義務がある。しかし、すべてのノードに確実に行き渡ることは保証されない。たとえば `FAIL` が検知されたけれど、その理由が他のノードにアクセスできないから、といったケースもありえる。
 
-**Case 1**: If a majority of masters have flagged a node as `FAIL`, because of failure detection and the *chain effect* it generates, every other node will eventually flag the master as `FAIL`, since in the specified window of time enough failures will be reported.
+しかし、Redisクラスターの障害検知は活性の必要事項を持つ。結果としてすべてのノードの合意を取り付ける必要がある。スプリットブレイン（訳注: 何らかの理由で複数のノードが自分をマスターとして認識してしまうこと）が起こりうる 2つのケースが考えられる。いくつかの少数のノードが特定のノードを `FAIL` だと判断したとき、あるいは逆に少数のノードが特定のノードが `FAIL` でない、と判断したとき。これらのケースでも、クラスターは最終的には単一の状態を持つようになっている。
 
-**Case 2**: When only a minority of masters have flagged a node as `FAIL`, the slave promotion will not happen (as it uses a more formal algorithm that makes sure everybody knows about the promotion eventually) and every node will clear the `FAIL` state as per the `FAIL` state clearing rules above (i.e. no promotion after N times the `NODE_TIMEOUT` has elapsed).
+**ケース1**: 多くのマスターが特定のノードを `FAIL` と判断し、障害検知され *連鎖的な影響が発生し*、他のすべてのノードが `FAIL` を認識する。このとき一定の時間幅に達していれば、障害として検知されるべきものである、と言えるだろう。
 
-**The `FAIL` flag is only used as a trigger to run the safe part of the algorithm** for the slave promotion. In theory a slave may act independently and start a slave promotion when its master is not reachable, and wait for the masters to refuse to provide the acknowledgment if the master is actually reachable by the majority. However the added complexity of the `PFAIL -> FAIL` state, the weak agreement, and the `FAIL` message forcing the propagation of the state in the shortest amount of time in the reachable part of the cluster, have practical advantages. Because of these mechanisms, usually all the nodes will stop accepting writes at about the same time if the cluster is in an error state. This is a desirable feature from the point of view of applications using Redis Cluster. Also erroneous election attempts initiated by slaves that can't reach its master due to local problems (the master is otherwise reachable by the majority of other master nodes) are avoided.
+**ケース2**: 少数のマスターが特定のノードを `FAIL` と判断したとき、スレーブの昇格は起こらない（全員の合意を得られたことを確認してから昇格させるアルゴリズムが使われている）。すべてのノードは `FAIL` フラグを消去する（昇格が `NODE_TIMEOUT` かける N の時間起こらないとき）。
+
+** スレーブの昇格において、`FAIL` フラグはアルゴリズムの一部を実行するための契機に過ぎません**。スレーブからマスターへの疎通が無くなったとき、スレーブが独自に昇格を行うといったことがあり得ます。そのときは多数のマスターに確認を求めます。しかし `PFAIL` から `FAIL` への複雑な変化において、弱い合意、および `FAIL` メッセージが最短で伝播されるという挙動は、実用的な実装です。これらの仕組みによって、障害が検知されたノードで継続して書き込みが行われることを回避できます。これは Redisクラスターを使うアプリケーションから見たときんは望ましい機能です。また、部分的な問題（マスターは他のマスターから疎通できるなど）によって発生しうる、スレーブによる誤った選挙も回避できます。
+
 
 Configuration handling, propagation, and failovers
 ===
