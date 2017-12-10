@@ -557,25 +557,26 @@ Redisクラスターにおける障害の検知とは、特定のマスターあ
 ** スレーブの昇格において、`FAIL` フラグはアルゴリズムの一部を実行するための契機に過ぎません**。スレーブからマスターへの疎通が無くなったとき、スレーブが独自に昇格を行うといったことがあり得ます。そのときは多数のマスターに確認を求めます。しかし `PFAIL` から `FAIL` への複雑な変化において、弱い合意、および `FAIL` メッセージが最短で伝播されるという挙動は、実用的な実装です。これらの仕組みによって、障害が検知されたノードで継続して書き込みが行われることを回避できます。これは Redisクラスターを使うアプリケーションから見たときんは望ましい機能です。また、部分的な問題（マスターは他のマスターから疎通できるなど）によって発生しうる、スレーブによる誤った選挙も回避できます。
 
 
-Configuration handling, propagation, and failovers
+再構成の挙動、伝播、およびフェイルオーバについて
 ===
 
-Cluster current epoch
+クラスターの epoch
 ---
 
-Redis Cluster uses a concept similar to the Raft algorithm "term". In Redis Cluster the term is called epoch instead, and it is used in order to give incremental versioning to events. When multiple nodes provide conflicting information, it becomes possible for another node to understand which state is the most up to date.
+Redisクラスターは Raftアルゴリズムの "term" と似たコンセプトを用いています。Redisクラスターでは、この epoch に相当するものを代わりに epoch と呼んでおり、イベントのバージョンを増分で管理していくために使われています。これにより、複数のノードが競合する情報を発信してしまったときに、どの情報が最も最新のものなのか判断することができます。
 
-The `currentEpoch` is a 64 bit unsigned number.
+`currentEpoch` は 64ビットの符号なし整数です。
 
-At node creation every Redis Cluster node, both slaves and master nodes, set the `currentEpoch` to 0.
+Redisクラスターを作成すると、マスターとスレーブいずれにおいても、`currectEpoch` を 0 にセットします。
 
-Every time a packet is received from another node, if the epoch of the sender (part of the cluster bus messages header) is greater than the local node epoch, the `currentEpoch` is updated to the sender epoch.
+他のノードからパケットを受け取るたび、送信元の epoch（クラスターバスメッセ―ジのヘッダーに含まれる）が手元の epoch より大きければ、`currentEpoch` を受け取った epoch で更新します。
 
-Because of these semantics, eventually all the nodes will agree to the greatest `configEpoch` in the cluster.
+この仕組みにより、すべてのノードがいずれは最新の `configEpoch` に追いつき、同意するということになります。
 
-This information is used when the state of the cluster is changed and a node seeks agreement in order to perform some action.
+この情報はクラスターのステータスが変化したとき、あるいはノードが何らかのアクションを起こす時に合意を取る目的で利用されます。
 
-Currently this happens only during slave promotion, as described in the next section. Basically the epoch is a logical clock for the cluster and dictates that given information wins over one with a smaller epoch.
+現時点ではスレーブの昇格のみとなっており、これについては次のセクションで説明しています。基本的に epoch はクラスターの論理的な時刻情報であり、小さい方の epoch よりも 1 だけ大きな値をとります。
+
 
 Configuration epoch
 ---
