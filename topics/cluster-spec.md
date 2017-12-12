@@ -554,7 +554,7 @@ Redisクラスターにおける障害の検知とは、特定のマスターあ
 
 **ケース2**: 少数のマスターが特定のノードを `FAIL` と判断したとき、スレーブの昇格は起こらない（全員の合意を得られたことを確認してから昇格させるアルゴリズムが使われている）。すべてのノードは `FAIL` フラグを消去する（昇格が `NODE_TIMEOUT` かける N の時間起こらないとき）。
 
-** スレーブの昇格において、`FAIL` フラグはアルゴリズムの一部を実行するための契機に過ぎません**。スレーブからマスターへの疎通が無くなったとき、スレーブが独自に昇格を行うといったことがあり得ます。そのときは多数のマスターに確認を求めます。しかし `PFAIL` から `FAIL` への複雑な変化において、弱い合意、および `FAIL` メッセージが最短で伝播されるという挙動は、実用的な実装です。これらの仕組みによって、障害が検知されたノードで継続して書き込みが行われることを回避できます。これは Redisクラスターを使うアプリケーションから見たときんは望ましい機能です。また、部分的な問題（マスターは他のマスターから疎通できるなど）によって発生しうる、スレーブによる誤った選挙も回避できます。
+** スレーブの昇格において、`FAIL` フラグはアルゴリズムの一部を実行するための契機に過ぎません**。スレーブからマスターへの疎通が無くなったとき、スレーブが独自に昇格を行うといったことがあり得ます。そのときは多数のマスターに確認を求めます。しかし `PFAIL` から `FAIL` への複雑な変化において、弱い合意、および `FAIL` メッセージが最短で伝播されるという挙動は、実用的な実装です。これらの仕組みによって、障害が検知されたノードで継続して書き込みが行われることを回避できます。これは Redisクラスターを使うアプリケーションから見たときには望ましい機能です。また、部分的な問題（マスターは他のマスターから疎通できるなど）によって発生しうる、スレーブによる誤った選挙も回避できます。
 
 
 再構成の挙動、伝播、およびフェイルオーバについて
@@ -563,7 +563,7 @@ Redisクラスターにおける障害の検知とは、特定のマスターあ
 クラスターの epoch
 ---
 
-Redisクラスターは Raftアルゴリズムの "term" と似たコンセプトを用いています。Redisクラスターでは、この epoch に相当するものを代わりに epoch と呼んでおり、イベントのバージョンを増分で管理していくために使われています。これにより、複数のノードが競合する情報を発信してしまったときに、どの情報が最も最新のものなのか判断することができます。
+Redisクラスターは Raftアルゴリズムの "term" と似たコンセプトを用いています。Redisクラスターでは、この term に相当するものを代わりに epoch と呼んでおり、イベントのバージョンを増分で管理していくために使われています。これにより、複数のノードが競合する情報を発信してしまったときに、どの情報が最も最新のものなのか判断することができます。
 
 `currentEpoch` は 64ビットの符号なし整数です。
 
@@ -578,51 +578,47 @@ Redisクラスターを作成すると、マスターとスレーブいずれに
 現時点ではスレーブの昇格のみとなっており、これについては次のセクションで説明しています。基本的に epoch はクラスターの論理的な時刻情報であり、小さい方の epoch よりも 1 だけ大きな値をとります。
 
 
-Configuration epoch
+構成における epoch
 ---
 
-Every master always advertises its `configEpoch` in ping and pong packets along with a bitmap advertising the set of slots it serves.
+各マスターはスロット群のマッピングとは別に、ping/pong パケットを用いて自身の `configEpoch` も配布している。
 
-The `configEpoch` is set to zero in masters when a new node is created.
+この `configEpoch` は、新しいノードが作成されるとマスターで 0 になる。
 
-A new `configEpoch` is created during slave election. Slaves trying to replace
-failing masters increment their epoch and try to get authorization from
-a majority of masters. When a slave is authorized, a new unique `configEpoch`
-is created and the slave turns into a master using the new `configEpoch`.
+新しい `configEpoch` はスレーブの選挙中に作成されます。スレーブは障害になったマスターを置き換える際 epoch を加算し、他の多数のマスターから合意を取り付けようとします。合意が得られると新しく独自の `configEpoch` が作られ、その新しい `configEpoch` でマスターとして動きます。
 
-As explained in the next sections the `configEpoch` helps to resolve conflicts when different nodes claim divergent configurations (a condition that may happen because of network partitions and node failures).
+次の章で説明するように、`configEpoch` は異なるノードがそれぞれで分岐した構成を取ろうとしたときに、競合を解消する助けとなります。
 
-Slave nodes also advertise the `configEpoch` field in ping and pong packets, but in the case of slaves the field represents the `configEpoch` of its master as of the last time they exchanged packets. This allows other instances to detect when a slave has an old configuration that needs to be updated (master nodes will not grant votes to slaves with an old configuration).
+スレーブもまた `configEpoch` を ping/pong パケットで配布しますが、その中身はマスターのものです。ただしこれにより、他のインスタンスから見て古い状態になっていることが検知できます（マスターノードは古い状態のノードには投票しません）。
 
-Every time the `configEpoch` changes for some known node, it is permanently stored in the nodes.conf file by all the nodes that receive this information. The same also happens for the `currentEpoch` value. These two variables are guaranteed to be saved and `fsync-ed` to disk when updated before a node continues its operations.
+`configEpoch` の変更を受け取ると、その値は永続的なものとして node.conf に保存されます。これは `currentEpoch` に関しても同様です。これらの 2つの値は `fsync-ed` でノードが次の動作に移る前にディスクに書き込まれます。
 
-The `configEpoch` values generated using a simple algorithm during failovers
-are guaranteed to be new, incremental, and unique.
+このように `configEpoch` の値はフェイルオーバ時に単純なアルゴリズムで生成され、常に最新であり、独立していて、加算的なものとして扱われます。
 
-Slave election and promotion
+
+スレーブの選挙と昇格
 ---
 
-Slave election and promotion is handled by slave nodes, with the help of master nodes that vote for the slave to promote.
-A slave election happens when a master is in `FAIL` state from the point of view of at least one of its slaves that has the prerequisites in order to become a master.
+スレーブの選挙と昇格は、昇格についてはマスターの助けを借りながら、スレーブによって行われます。少なくとも 1つのスレーブがマスターになる条件を満たしており、そのスレーブから見てマスターが `FAIL` 状態になると、スレーブの選挙が発生します。
 
-In order for a slave to promote itself to master, it needs to start an election and win it. All the slaves for a given master can start an election if the master is in `FAIL` state, however only one slave will win the election and promote itself to master.
+スレーブが昇格を行うためには、選挙を行って選ばれなくてはなりません。マスターが `FAIL` 状態なのであれば全てのスレーブで選挙を開始することができますが、選ばれて昇格するスレーブはたったひとつです。
 
-A slave starts an election when the following conditions are met:
+スレーブは以下の条件で選挙を開始します。
 
-* The slave's master is in `FAIL` state.
-* The master was serving a non-zero number of slots.
-* The slave replication link was disconnected from the master for no longer than a given amount of time, in order to ensure the promoted slave's data is reasonably fresh. This time is user configurable.
+* スレーブのマスターが `FAIL` 状態である
+* マスターに 1つ以上のスロットが割り当てられている
+* レプリケーションの接続が一定時間以上切れていて、昇格しようとしているスレーブのデータが比較的新しいこと。この時間はユーザが設定可能なものです。
 
-In order to be elected, the first step for a slave is to increment its `currentEpoch` counter, and request votes from master instances.
+スレーブが選ばれるための最初のステップは、`currentEpoch` カウンターを加算し、マスター群に投票を依頼することです。
 
-Votes are requested by the slave by broadcasting a `FAILOVER_AUTH_REQUEST` packet to every master node of the cluster. Then it waits for a maximum time of two times the `NODE_TIMEOUT` for replies to arrive (but always for at least 2 seconds).
+投票はスレーブによって依頼され、`FAILOVER_AUTH_REQUEST` パケットですべてのマスターに同報されます。そのあと `NODE_TIMEOUT` の 2倍の時間だけ応答を待ちます（ほとんどの場合は 2秒です）。
 
-Once a master has voted for a given slave, replying positively with a `FAILOVER_AUTH_ACK`, it can no longer vote for another slave of the same master for a period of `NODE_TIMEOUT * 2`. In this period it will not be able to reply to other authorization requests for the same master. This is not needed to guarantee safety, but useful for preventing multiple slaves from getting elected (even if with a different `configEpoch`) at around the same time, which is usually not wanted.
+マスターが一度投票すると、`FAILOVER_AUTH_ACK` で応答を返し、以降は `NODE_TIMEOUT * 2` の時間、同じマスターに関連するスレーブには投票しません。この間は、同じマスターに関連する他の承認リクエストには応答しないということです。これによって安全が保証されるわけではありませんが、ほとんど同じ時間帯に複数のスレーブが選出されてしまうこと（たとえ `configEpoch` が違っても）は防げるので、望まない事態は避けられるでしょう。
 
-A slave discards any `AUTH_ACK` replies with an epoch that is less than the `currentEpoch` at the time the vote request was sent. This ensures it doesn't count votes intended for a previous election.
+スレーブは、投票を依頼した時点における `currentEpoch` よりも古い `AUTH_ACK` 応答を破棄します。これによって、古い投票のカウントを回避します。
 
-Once the slave receives ACKs from the majority of masters, it wins the election.
-Otherwise if the majority is not reached within the period of two times `NODE_TIMEOUT` (but always at least 2 seconds), the election is aborted and a new one will be tried again after `NODE_TIMEOUT * 4` (and always at least 4 seconds).
+スレーブが多数派のマスターから ACK を受け取ったとき、投票で選出されたものとして扱われます。もし `NODE_TIMEOUT` の 2倍の時間だけ（多くの場合 2秒）待っても多数派の応答が得られない場合、投票は終了され `NODE_TIMEOUT` の 4倍の時間（たいてい 秒）だけ待って改めて試行されます。
+
 
 Slave rank
 ---
