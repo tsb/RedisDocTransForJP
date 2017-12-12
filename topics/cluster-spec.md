@@ -10,13 +10,13 @@ Redisクラスターの仕様
 ゴール
 ---
 
-デザイン面において、Redisクラスターは分散を実装したものであり、以下のようなゴールに基づいている。
+デザイン面において、Redisクラスターは分散を実装したものであり、以下のようなゴールに基づいています。
 
 * 高いパフォーマンスが 1000ノードまで線形にスケールする。プロキシはなく、非同期のレプリケーションを用い、値をマージすることもない。
 * 書き込みの安全度: システムは（ベストエフォートで）多数派のマスターノードに接続しているクライアントからの書き込みリクエストを保持しようとします。たいてい、小さな幅ではありますが書き込みが失われることがあります。少数派のパーティションにクライアントが接続している場合、このウィンドウは大きくなります。
 * 可用性: Redis クラスターは、多数派のマスターで疎通性があり、かつ疎通性が無い場合でも少なくとも 1つのスレーブが疎通性を保っていれば、パーティションを保持することができます。さらにいえば、*レプリカ移行*を用いて、スレーブがなくなったマスターは、複数のスレーブを持つマスターからレプリカを譲り受けることができます。
 
-このドキュメントに罹れている機能は、Redis 3.0 以降で実装されています。
+このドキュメントに書かれている機能は、Redis 3.0 以降で実装されています。
 
 
 サブセットの実装
@@ -38,7 +38,7 @@ TCPバスやバイナリープロトコルを用いてすべてのノードが�
 
 クラスターバスはまた、Pub/Subメッセージをクラスター内で伝播させる、あるいはユーザによる手動のフェイルオーバを調整するために利用されます（手動のフェイルオーバとは Redisクラスターによって問題を検知したのではなく、システム管理者が直接実行するものです）。
 
-クラスターノードはリクエストをプロキシすることができないので、`-MOVED` や `-ASK` といったエラーを用いて他のノードにリダイレクトされる。クライアントは理論的にはすべてのノードに自由にリクエストを行ってよく、必要に応じてリダイレクトを受け取るので、クラスターの状態を持つ必要はない。しかし、クライアント側でキーとノードのマップをキャッシュさせることができるならば、性能を改善することができるだろう。
+クラスターノードはリクエストをプロキシすることができないので、`-MOVED` や `-ASK` といったエラーを用いて他のノードにリダイレクトされます。クライアントは理論的にはすべてのノードに自由にリクエストを行ってよく、必要に応じてリダイレクトを受け取るので、クラスターの状態を持つ必要はない。しかし、クライアント側でキーとノードのマップをキャッシュさせることができるならば、性能を改善することができるでしょう。
 
 
 書き込み安全
@@ -110,7 +110,7 @@ Redisクラスターの主な構成概要
 
 キー空間はハッシュされて 16384スロットに分割されるので、最大でクラスターは 16384ノードのマスターを持つことができます（しかし、ノード数は最大でも 1000程度までにしておくことをお勧めする）。
 
-各マスターノードは 16384スロットの一部を受け持つ。クラスターは再構成が進行中でないときは**安定している**と言える（ここで再構成とは、例えばひとつのノードから他のノードへスロットが移動すること）。クラスターが安定した状態であれば、ひとつのスロットは単一のノードで処理される（しかしながら、ネットワークの分断や障害の発生時、古いデータの読み込みを許容できるのであれば、読み込みが継続できるようひとつ以上のスレーブによって置き換えることができます）。
+各マスターノードは 16384スロットの一部を受け持つ。クラスターは再構成が進行中でないときは**安定している**と言えます（ここで再構成とは、例えばひとつのノードから他のノードへスロットが移動すること）。クラスターが安定した状態であれば、ひとつのスロットは単一のノードで処理されます（しかしながら、ネットワークの分断や障害の発生時、古いデータの読み込みを許容できるのであれば、読み込みが継続できるようひとつ以上のスレーブによって置き換えることができます）。
 
 基礎となるアルゴリズムは、以下のような形でハッシュのスロットをキーにマッピングします（このルールの例外であるハッシュタグは次の章で扱います）。
 
@@ -259,9 +259,9 @@ Nノードの構成を考えるとき、すべてのノードは N-1 の外向�
 
 * とあるノードを考えた時そのノードは、すでに信頼済みのノードによってゴシップ（訳注: P2P におけるピア間の通信）された場合、クラスターの一部として登録される。つまり、例えば A が B を認識していて、B が C を認識しているとき、B はゴシップメッセージを A と C に送信する。このとき A は C をネットワークの一部として認識し、C に接続を試みる。
 
-これはつまり、既存のグラフ構造にノードを追加した場合、自動的にすべてのノードが接続された結果が得られることを意味する。システム管理者によって信頼関係が確立される必要があるが、クラスターは他のノードを自動検出することができる。
+これはつまり、既存のグラフ構造にノードを追加した場合、自動的にすべてのノードが接続された結果が得られることを意味しています。システム管理者によって信頼関係が確立される必要がありますが、クラスターは他のノードを自動検出することができます。
 
-この仕組みはクラスターをより堅牢にする上、IPアドレスの変更やネットワークに関連したイベントによって異なる Redisクラスターが混在してしまうことも防ぐ。
+この仕組みはクラスターをより堅牢にする上、IPアドレスの変更やネットワークに関連したイベントによって異なる Redisクラスターが混在してしまうことも防ぎます。
 
 
 リダイレクションとリシャーディング
@@ -270,15 +270,15 @@ Nノードの構成を考えるとき、すべてのノードは N-1 の外向�
 MOVED リダイレクション
 ---
 
-Redisクライアントは、スレーブノードも含めてすべてのノードにクエリを送出することができる。ノードはクエリを分析し、処理できるもの（クエリが単一キーか、あるいは複数キーだがすべてが同じスロットにある）ならば、キーを処理すべきノードを探す。
+Redisクライアントは、スレーブノードも含めてすべてのノードにクエリを送出することができます。ノードはクエリを分析し、処理できるもの（クエリが単一キーか、あるいは複数キーだがすべてが同じスロットにある）ならば、キーを処理すべきノードを探します。
 
-もしスロットがそのノードに割り当てられていた場合、クエリはそのまま処理される。そうでない場合は内部でノードのマッピングを確認し、以下のような MOVED エラーを返す。
+もしスロットがそのノードに割り当てられていた場合、クエリはそのまま処理されます。そうでない場合は内部でノードのマッピングを確認し、以下のような MOVED エラーを返します。
 
     GET x
     -MOVED 3999 127.0.0.1:6381
 
-このエラーには、キーのスロット（3999）およびクエリを処理すべき IPアドレスとポートの組が含まれている。クライアントは指定されたアドレスとポートに対し、もう一度クエリを投げる必要がある。
-留意すべき点として、クライアント側でクエリを他のノードに再送する段階で時間を要し、その間にクラスターの構成が変わってしまった場合、再送した先のノードが再度 MOVEDエラーを返す可能性がある。また、最初に通信したノードが最新の情報を持っていないケースでも同じような事象が起こりうる。
+このエラーには、キーのスロット（3999）およびクエリを処理すべき IPアドレスとポートの組が含まれています。クライアントは指定されたアドレスとポートに対し、もう一度クエリを投げる必要があります。
+留意すべき点として、クライアント側でクエリを他のノードに再送する段階で時間を要し、その間にクラスターの構成が変わってしまった場合、再送した先のノードが再度 MOVEDエラーを返す可能性があります。また、最初に通信したノードが最新の情報を持っていないケースでも同じような事象が起こりうるでしょう。
 
 したがって、クラスターのノードから見た視点では ID によって各ノードが識別されますが、スロットとノードのマッピングを返すことでインターフェイスを簡略化しようとしています。
 
@@ -312,15 +312,15 @@ Redisクラスターはオンラインでノードを追加したり削除する
 * `CLUSTER SETSLOT` slot MIGRATING node
 * `CLUSTER SETSLOT` slot IMPORTING node
 
-最初の 2つのコマンド `ADDSLOTS` と `DELSLOTS` は、単純にスロットを割り当て（もしくは除去）するために使われる。スロットの割り当てとは、指定されたスロットに関する情報を保持しつつ応答するよう、マスターノードに指示を出すもの。
+最初の 2つのコマンド `ADDSLOTS` と `DELSLOTS` は、単純にスロットを割り当て（もしくは除去）するために使われます。スロットの割り当てとは、指定されたスロットに関する情報を保持しつつ応答するよう、マスターノードに指示を出すものです。
 
-スロットがアサインされたら、構成の伝達セクションで後述するように、ゴシッププロトコルでそれを周知する。
+スロットがアサインされたら、構成の伝達セクションで後述するように、ゴシッププロトコルでそれを周知します。
 
-`ADDSLOTS` は多くの場合、新しいクラスターがゼロから作られたときに各マスターで 16384種類のスロットを割り当てるときに使われる。
+`ADDSLOTS` は多くの場合、新しいクラスターがゼロから作られたときに各マスターで 16384種類のスロットを割り当てるときに使われます。
 
-`DELSLOTS` は主に手動によるクラスターの構成変更、あるいは実際にはまれだと思うが、デバッグ用途でも使われる。
+`DELSLOTS` は主に手動によるクラスターの構成変更、あるいは実際にはまれだと思うが、デバッグ用途でも使われます。
 
-`SELSLOT` サブコマンドは、`SELSLOT <slot> NODE` のような形で用いるが、特定の ID のノードにスロットを割り当てるときに使われる。その他、ノードは 2つの特別なステータス `MIGRATING` と `IMPORTING` になることがある。これらの 2つのステータスはスロットを移動するときにみられる。
+`SELSLOT` サブコマンドは、`SELSLOT <slot> NODE` のような形で用いるが、特定の ID のノードにスロットを割り当てるときに使われます。その他、ノードは 2つの特別なステータス `MIGRATING` と `IMPORTING` になることがあります。これらの 2つのステータスはスロットを移動するときにみられます。
 
 * スロットが MIGRATING になっているとき、ノードはキーが存在する限りスロットに関するすべてのクエリを受け付けるが、そうでない場合は `-ASK` リダイレクションとして応答し、移動先のノードを返す。
 * スロットが IMPORTING のとき、ノードはスロットに関して `ASKING` コマンドで行われたクエリに応答します。もしクライアントが `ASKING` コマンドで呼び出していない場合、クエリは通常と同じように、`-MOVED` エラーで実際にスロットが割り当てられたノードにリダイレクトさせる。
@@ -367,10 +367,10 @@ ASKリダイレクション
 * ASKING コマンドを添えてリダイレクトのクエリを送る。
 * ローカルに保持しているマッピングテーブルは更新しない。
 
-スロットの移行が完了したら、ノード A は MOVEDメッセージを返し、クライアントはマッピングテーブルを更新することになる。例を挙げれば、8番のスロットに対し新しい IPアドレスとポートの組を割り当てて返すということだ。
-なお、もしクライアントに不具合がありマッピングを意図したよりも早く更新してしまった場合、ASKING コマンドを送らないので問題になることは無いが、ノード B はクライアントにノード A への MOVEDリダイレクションエラーを返す。
+スロットの移行が完了したら、ノード A は MOVEDメッセージを返し、クライアントはマッピングテーブルを更新することになります。例を挙げれば、8番のスロットに対し新しい IPアドレスとポートの組を割り当てて返すということです。
+なお、もしクライアントに不具合がありマッピングを意図したよりも早く更新してしまった場合、ASKING コマンドを送らないので問題になることは無いが、ノード B はクライアントにノード A への MOVEDリダイレクションエラーを返すでしょう。
 
-スロットの移行は似たような内容になるが、異なる形で `CLUSTER SETSLOT`コマンドのドキュメントでも解説している。
+スロットの移行は、似たような内容になりますが異なる形で `CLUSTER SETSLOT`コマンドのドキュメントでも解説しています。
 
 
 クライアントにおける初回のコネクションとリダイレクションの扱い
@@ -380,12 +380,12 @@ ASKリダイレクション
 
 クライアントはスマートに処理を行うため、スロットの構成を記憶しておくべきでしょう。しかし、この構成は *必ずしも* 最新であるとは言えません。間違ったノードにアクセスした場合、リダイレクトが返ってくるだけなので、クライアント側から見て情報をアップデートするトリガーとして考えるべきです。
 
-クライアントは以下のようなシナリオで、スロットとノード全体のマッピングのリストを取得することになる。
+クライアントは以下のようなシナリオで、スロットとノード全体のマッピングのリストを取得することになります。
 
 * 起動時、スロットの構成を初期化するため
 * `MOVED`リダイレクションが返ってきたとき
 
-ここでクライアントは `MOVED`リダイレクションが返ってきたスロットだけを更新することもできる。ただし、たいていの場合は複数のスロットが一度に変更される（たとえばスレーブがマスターに昇格したとき、古いマスターに割り当てられたスロットがすべて移動する）。こうした点を考えて、`MOVED`リダイレクションが返ってきたときにはゼロベースで全体のマッピングを更新するように実装した方が、より簡単だろう。
+ここでクライアントは `MOVED`リダイレクションが返ってきたスロットだけを更新することもできます。ただし、たいていの場合は複数のスロットが一度に変更されます（たとえばスレーブがマスターに昇格したとき、古いマスターに割り当てられたスロットがすべて移動する）。こうした点を考えて、`MOVED`リダイレクションが返ってきたときにはゼロベースで全体のマッピングを更新するように実装した方が、より簡単でしょう。
 
 スロットの構成を取得するとき、Redisクラスターはパースを必要としない `CLUSTER NODES`コマンドの代わりに、クライアントにとって本当に必要な情報だけを返します。
 
@@ -534,21 +534,21 @@ Redisクラスターにおける障害の検知とは、特定のマスターあ
 * ノードを `FAIL` とする
 * `FAIL` メッセージを疎通可能なすべてのノードに送る
 
-`FAIL` メッセージは、状態が `PFAIL` であるか否かに関わらず、受信したすべてのノードにおいて `FAIL` のフラグをセットさせる。。
+`FAIL` メッセージは、状態が `PFAIL` であるか否かに関わらず、受信したすべてのノードにおいて `FAIL` のフラグをセットさせます。
 
-なお、*FAIL フラグは一方向*である。この意味は、ノードが `PFAIL` から `FAIL` になることはあっても逆はありえず、`FAIL` フラグは幾つかの条件下でクリアされるのみだ、ということである。
+なお、*FAIL フラグは一方向*です。この意味は、ノードが `PFAIL` から `FAIL` になることはあっても逆はありえず、`FAIL` フラグは幾つかの条件下でクリアされるのみだ、ということです。
 
 * ノードがスレーブであり、疎通可能になっていること。このケースではスレーブであることが条件に含まれているため、フェイルオーバは発生せず、`FAIL` フラグをクリアするだけの結果となる。
 * ノードがマスターではあるもののスロットの割り当てが無く、疎通可能になっていること。この場合は割り当てられたスロットが無いためクラスターに参加していないということであり、`FAIL` フラグは単にクリアされるだけとなる。その後、引き続きクラスターへの参加を待つことになる。
 * ノードがマスターで疎通可能になっているが、しばらくの時間（`NODE_TIMEOUT` かける N ）が経過しており、スレーブの昇格が起こっていない場合。このときはフェイルオーバなどを続けるよりも、クラスターに再加入させた方が良いと判断される。
 
-`PFAIL` から `FAIL` への変化においては、弱い合意の形を取る。
+`PFAIL` から `FAIL` への変化においては、弱い合意の形を取ります。
 
 1. ノードは、他のノードから見た情報を集め、多くのノードから "合意" が取れれば、それはつまり異なるノード、異なる時間における確認の結果ということになるので、より多くのマスターが合意したとみなす。しかしながら、障害は一定の時間枠を設けて多数のノードが合意することで検知するデザインになっているので、個別の障害の通知が古くなったときには破棄される。
 
 2. すべてのノードは `FAIL` を認識したとき、他のノードすべてに `FAIL` メッセージを通知する義務がある。しかし、すべてのノードに確実に行き渡ることは保証されない。たとえば `FAIL` が検知されたけれど、その理由が他のノードにアクセスできないから、といったケースもありえる。
 
-しかし、Redisクラスターの障害検知は活性の必要事項を持つ。結果としてすべてのノードの合意を取り付ける必要がある。スプリットブレイン（訳注: 何らかの理由で複数のノードが自分をマスターとして認識してしまうこと）が起こりうる 2つのケースが考えられる。いくつかの少数のノードが特定のノードを `FAIL` だと判断したとき、あるいは逆に少数のノードが特定のノードが `FAIL` でない、と判断したとき。これらのケースでも、クラスターは最終的には単一の状態を持つようになっている。
+しかし、Redisクラスターの障害検知は活性の必要事項を持ちます。結果としてすべてのノードの合意を取り付ける必要があります。スプリットブレイン（訳注: 何らかの理由で複数のノードが自分をマスターとして認識してしまうこと）が起こりうる 2つのケースが考えられます。いくつかの少数のノードが特定のノードを `FAIL` だと判断したとき、あるいは逆に少数のノードが特定のノードが `FAIL` でない、と判断したとき。これらのケースでも、クラスターは最終的には単一の状態を持つようになっています。
 
 **ケース1**: 多くのマスターが特定のノードを `FAIL` と判断し、障害検知され *連鎖的な影響が発生し*、他のすべてのノードが `FAIL` を認識する。このとき一定の時間幅に達していれば、障害として検知されるべきものである、と言えるだろう。
 
@@ -581,9 +581,9 @@ Redisクラスターを作成すると、マスターとスレーブいずれに
 構成における epoch
 ---
 
-各マスターはスロット群のマッピングとは別に、ping/pong パケットを用いて自身の `configEpoch` も配布している。
+各マスターはスロット群のマッピングとは別に、ping/pong パケットを用いて自身の `configEpoch` も配布しています。
 
-この `configEpoch` は、新しいノードが作成されるとマスターで 0 になる。
+この `configEpoch` は、新しいノードが作成されるとマスターで 0 になります。
 
 新しい `configEpoch` はスレーブの選挙中に作成されます。スレーブは障害になったマスターを置き換える際 epoch を加算し、他の多数のマスターから合意を取り付けようとします。合意が得られると新しく独自の `configEpoch` が作られ、その新しい `configEpoch` でマスターとして動きます。
 
@@ -617,60 +617,58 @@ Redisクラスターを作成すると、マスターとスレーブいずれに
 
 スレーブは、投票を依頼した時点における `currentEpoch` よりも古い `AUTH_ACK` 応答を破棄します。これによって、古い投票のカウントを回避します。
 
-スレーブが多数派のマスターから ACK を受け取ったとき、投票で選出されたものとして扱われます。もし `NODE_TIMEOUT` の 2倍の時間だけ（多くの場合 2秒）待っても多数派の応答が得られない場合、投票は終了され `NODE_TIMEOUT` の 4倍の時間（たいてい 秒）だけ待って改めて試行されます。
+スレーブが多数派のマスターから ACK を受け取ったとき、投票で選出されたものとして扱われます。もし `NODE_TIMEOUT` の 2倍の時間だけ（多くの場合 2秒）待っても多数派の応答が得られない場合、投票は終了され `NODE_TIMEOUT` の 4倍の時間（たいてい 4秒）だけ待って改めて試行されます。
 
 
-Slave rank
+スレーブの順位
 ---
 
-As soon as a master is in `FAIL` state, a slave waits a short period of time before trying to get elected. That delay is computed as follows:
+マスターが `FAIL` 状態になるとすぐ、スレーブは選挙に備えて短い待機時間をとります。この時間の計算式は以下です。
 
     DELAY = 500 milliseconds + random delay between 0 and 500 milliseconds +
             SLAVE_RANK * 1000 milliseconds.
 
-The fixed delay ensures that we wait for the `FAIL` state to propagate across the cluster, otherwise the slave may try to get elected while the masters are still unaware of the `FAIL` state, refusing to grant their vote.
+この決まった待機時間は、クラスター内で `FAIL` 状態が伝播するのを待つためのものです。これを待たないと、マスターが `FAIL` 状態を検知しないままに応答を行い、結果として投票を拒否することになってしまうかもしれません。
 
-The random delay is used to desynchronize slaves so they're unlikely to start an election at the same time.
+ランダムな遅延時間を設定するのは、まったく同じタイミングで選挙が開始することを防ぐためです。
 
-The `SLAVE_RANK` is the rank of this slave regarding the amount of replication data it has processed from the master.
-Slaves exchange messages when the master is failing in order to establish a (best effort) rank:
-the slave with the most updated replication offset is at rank 0, the second most updated at rank 1, and so forth.
-In this way the most updated slaves try to get elected before others.
+`SLAVE_RANK` はスレーブの順位で、マスターからレプリケートされたデータの処理量に関するものです。スレーブは、マスターが障害になったとき（ベストエフォートの）順位を決めるためにメッセージを交換します。
+もっとも最新のデータを持っているスレーブが 0位、その次が 1位、といった形です。
+この方法では、もっとも最新のデータを持っているスレーブが、まず選挙を試行します。
+順位の並びは厳密なものではありません。より高い順位のスレーブが選挙に失敗したとき、他のスレーブがすぐに試行します。
 
-Rank order is not strictly enforced; if a slave of higher rank fails to be
-elected, the others will try shortly.
+いずれかのスレーブが選挙で選ばれたときは、既存のマスターよりも高い値の `configEpoch` を持ちます。スレーブは ping/pong パケットでマスターになったことを伝播し、`configEpoch` とともに割り当てられたスロットを伝えます。
 
-Once a slave wins the election, it obtains a new unique and incremental `configEpoch` which is higher than that of any other existing master. It starts advertising itself as master in ping and pong packets, providing the set of served slots with a `configEpoch` that will win over the past ones.
+他のノードにおける再構成を迅速に行うため、pong パケットは他のすべてのノードに同報されます。その時点で到達できないノードは、最終的に ping もしくは pong パケットを受信したとき、あるいはハートビートによって古い状態を検知したときに `UPDATE` パケットを受信して再構成されます。
 
-In order to speedup the reconfiguration of other nodes, a pong packet is broadcast to all the nodes of the cluster. Currently unreachable nodes will eventually be reconfigured when they receive a ping or pong packet from another node or will receive an `UPDATE` packet from another node if the information it publishes via heartbeat packets are detected to be out of date.
+他のノードは、以前と同じスロットの割り当てを持ち、以前よりも大きな値の `configEpoch` を持っている新しいマスターを検出すると、再構成を行います。以前のマスターのスレーブ（もしくは、再加入した場合はフェイルオーバしたマスター）は構成の変更は行わず、新しいマスターからレプリケーションするよう再構成します。ノードがクラスターに再加入したときの挙動は、次の章で説明します。
 
-The other nodes will detect that there is a new master serving the same slots served by the old master but with a greater `configEpoch`, and will upgrade their configuration. Slaves of the old master (or the failed over master if it rejoins the cluster) will not just upgrade the configuration but will also reconfigure to replicate from the new master. How nodes rejoining the cluster are configured is explained in the next sections.
 
-Masters reply to slave vote request
+スレーブの投票依頼に対するマスターの応答
 ---
 
-In the previous section it was discussed how slaves try to get elected. This section explains what happens from the point of view of a master that is requested to vote for a given slave.
+前章では、スレーブの選挙を扱いました。この章ではスレーブから依頼があったときの挙動について、マスターの視点から説明を試みます。
 
-Masters receive requests for votes in form of `FAILOVER_AUTH_REQUEST` requests from slaves.
+マスターはスレーブから `FAILOVER_AUTH_REQUESTS` の形で投票の依頼を受け取ります。
+投票を行うにあたっては、いくつかの条件があります。
 
-For a vote to be granted the following conditions need to be met:
+1. マスターは各 epoch に対し、1回だけ投票を行い、古い epoch に対しては拒否を返します。すべてのマスターは lastVoteEpoch 値を持ち、この値よりも古い `currentEpoch` が含まれる投票依頼は拒否します。マスターが投票を正しく送ったとき、lastVoteEpoch をアップデートし、ディスクに安全に書き込まれます。
+2. マスターは、`FAIL` となっているマスター配下のスレーブにのみ投票します。
+3. マスターが保持している `currentEpoch` よりも古い `currentEpoch` を含むようなリクエストは無視されます。これによって、マスターの応答は常に依頼と同じ `currentEpoch` となります。もし同じスレーブが複数回投票の依頼を行い、その中で `currentEpoch` が加算されていた場合、古くて遅延した応答は、新しい投票ではカウントされないことが保証されています。
 
-1. A master only votes a single time for a given epoch, and refuses to vote for older epochs: every master has a lastVoteEpoch field and will refuse to vote again as long as the `currentEpoch` in the auth request packet is not greater than the lastVoteEpoch. When a master replies positively to a vote request, the lastVoteEpoch is updated accordingly, and safely stored on disk.
-2. A master votes for a slave only if the slave's master is flagged as `FAIL`.
-3. Auth requests with a `currentEpoch` that is less than the master `currentEpoch` are ignored. Because of this the master reply will always have the same `currentEpoch` as the auth request. If the same slave asks again to be voted, incrementing the `currentEpoch`, it is guaranteed that an old delayed reply from the master can not be accepted for the new vote.
+ルール 3 に従わない場合の問題は以下のような例が考えられます。
 
-Example of the issue caused by not using rule number 3:
+マスターの `currentEpoch` が 5 であり、lastVoteEpoch が 1 （何度か投票に失敗すると起こりえます）とします。
 
-Master `currentEpoch` is 5, lastVoteEpoch is 1 (this may happen after a few failed elections)
+* スレーブの `currentEpoch` が 3
+* スレーブは epoch 4（3+1）で選挙を試行し、マスターは `currentEpoch` 5 で応答を返しますが、遅延したとします。
+* スレーブが再度選挙を試行します。epoch は 5 （4+1）になり、このとき遅延した応答が `currentEpoch` 5 でスレーブに到達し、受理されます。
 
-* Slave `currentEpoch` is 3.
-* Slave tries to be elected with epoch 4 (3+1), master replies with an ok with `currentEpoch` 5, however the reply is delayed.
-* Slave will try to be elected again, at a later time, with epoch 5 (4+1), the delayed reply reaches the slave with `currentEpoch` 5, and is accepted as valid.
+4. マスターは一度投票を行ってから、`NODE_TIMEOUT * 2` の時間が経過するまで、同じマスター配下のスレーブには投票を行いません。同じ epoch のスレーブが 2つ同時に選出されることはないので、この挙動は厳密には必須ではありません。しかし実際には、他のスレーブが別に新しい選挙を行って選出されてしまう可能性があり、そうなると不要な 2回目のフェイルオーバが発生してしまうので、これを防ぐために他のスレーブに通知するための十分な時間を確保します。
+5. マスターは最善のスレーブを選ぶ努力はしません。スレーブのマスターが `FAIL` 状態になり、マスターが投票を行っていない場合、承認の投票を行います。最善のスレーブはほとんどの場合、前章で説明したように*より高い順位*なので、他のスレーブよりも先に選挙を行います。
+6. マスターが投票を拒否する時、何らかの応答を返すことはしません。単純にリクエストを無視します。
+7. マスターは持ち合わせている `configEpoch` よりも小さい `configEpoch` を送ってきたスレーブには投票しません。スレーブは自身のマスターが持つ `configEpoch` やスロットのマッピングを送ります。これはつまり、投票を依頼するスレーブはフェイルオーバしたいスロットの構成を知っていて、その構成が投票を行うマスターのものと同じか新しいものではなくてはならない、ということです。
 
-4. Masters don't vote for a slave of the same master before `NODE_TIMEOUT * 2` has elapsed if a slave of that master was already voted for. This is not strictly required as it is not possible for two slaves to win the election in the same epoch. However, in practical terms it ensures that when a slave is elected it has plenty of time to inform the other slaves and avoid the possibility that another slave will win a new election, performing an unnecessary second failover.
-5. Masters make no effort to select the best slave in any way. If the slave's master is in `FAIL` state and the master did not vote in the current term, a positive vote is granted. The best slave is the most likely to start an election and win it before the other slaves, since it will usually be able to start the voting process earlier because of its *higher rank* as explained in the previous section.
-6. When a master refuses to vote for a given slave there is no negative response, the request is simply ignored.
-7. Masters don't vote for slaves sending a `configEpoch` that is less than any `configEpoch` in the master table for the slots claimed by the slave. Remember that the slave sends the `configEpoch` of its master, and the bitmap of the slots served by its master. This means that the slave requesting the vote must have a configuration for the slots it wants to failover that is newer or equal the one of the master granting the vote.
 
 Practical example of configuration epoch usefulness during partitions
 ---
