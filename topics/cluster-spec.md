@@ -669,29 +669,26 @@ Redisクラスターを作成すると、マスターとスレーブいずれに
 6. マスターが投票を拒否する時、何らかの応答を返すことはしません。単純にリクエストを無視します。
 7. マスターは持ち合わせている `configEpoch` よりも小さい `configEpoch` を送ってきたスレーブには投票しません。スレーブは自身のマスターが持つ `configEpoch` やスロットのマッピングを送ります。これはつまり、投票を依頼するスレーブはフェイルオーバしたいスロットの構成を知っていて、その構成が投票を行うマスターのものと同じか新しいものではなくてはならない、ということです。
 
-
-Practical example of configuration epoch usefulness during partitions
+パーティションにおける epoch の実用性、その実例
 ---
 
-This section illustrates how the epoch concept is used to make the slave promotion process more resistant to partitions.
+この章では epoch のコンセプトが、パーティションにおいてスレーブの昇格をより頑健にするということを示します。
 
-* A master is no longer reachable indefinitely. The master has three slaves A, B, C.
-* Slave A wins the election and is promoted to master.
-* A network partition makes A not available for the majority of the cluster.
-* Slave B wins the election and is promoted as master.
-* A partition makes B not available for the majority of the cluster.
-* The previous partition is fixed, and A is available again.
+* マスターが疎通性を失ったとします。このとき 3つのスレーブ A, B, C があります。
+* スレーブ A が選挙で選出され、マスターへ昇格しました。
+* しかしその後ネットワーク的に分断され、A は多数派からの疎通が確認できなくなりました。
+* スレーブ B が選挙で選出され、マスターへ昇格しました。
+* 同様に B もまた多数派からの疎通がなくなりました。
+* ネットワークの分断が修復され、A が復旧しました。
 
-At this point B is down and A is available again with a role of master (actually `UPDATE` messages would reconfigure it promptly, but here we assume all `UPDATE` messages were lost). At the same time, slave C will try to get elected in order to fail over B. This is what happens:
+この時点では B がダウンしているが A が復旧しており、再度マスターになれるはずです（実際のところ `UPDATE` メッセージは都度再構成を促しますが、ここではすべて失われたと仮定します）。このとき、スレーブ C がフェイルオーバによって選出されようと試みます。このときは以下のようになります。
 
-1. C will try to get elected and will succeed, since for the majority of masters its master is actually down. It will obtain a new incremental `configEpoch`.
-2. A will not be able to claim to be the master for its hash slots, because the other nodes already have the same hash slots associated with a higher configuration epoch (the one of B) compared to the one published by A.
-3. So, all the nodes will upgrade their table to assign the hash slots to C, and the cluster will continue its operations.
+1. C は選挙を試みます。多数派のマスターから見てマスターはダウンしているわけですから、これは成功します。このとき `configEpoch` が加算されます。
+2. A はスロットの関係でマスターになることはできません。このとき A が保持している epoch値は古いものになっており、それより新しい epoch値（たとえば B のもの）を持つノードにスロットがアサインされているからです。
+3. したがって、すべてのノードは C にスロットがアサインされたものとしてテーブルを更新し、その後クラスターは操作を受け付けるようになります。
 
-As you'll see in the next sections, a stale node rejoining a cluster
-will usually get notified as soon as possible about the configuration change
-because as soon as it pings any other node, the receiver will detect it
-has stale information and will send an `UPDATE` message.
+次の章では、外れたノードがクラスターに再加入する際には他のノードをすぐに ping するため、再構成の通知が迅速に行われることを説明します。受信側は古い情報を検知し、`UPDATE` メッセージを送信します。
+
 
 Hash slots configuration propagation
 ---
