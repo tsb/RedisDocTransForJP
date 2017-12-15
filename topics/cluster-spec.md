@@ -690,21 +690,19 @@ Redisクラスターを作成すると、マスターとスレーブいずれに
 次の章では、外れたノードがクラスターに再加入する際には他のノードをすぐに ping するため、再構成の通知が迅速に行われることを説明します。受信側は古い情報を検知し、`UPDATE` メッセージを送信します。
 
 
-Hash slots configuration propagation
+スロット構成の伝播
 ---
 
-An important part of Redis Cluster is the mechanism used to propagate the information about which cluster node is serving a given set of hash slots. This is vital to both the startup of a fresh cluster and the ability to upgrade the configuration after a slave was promoted to serve the slots of its failing master.
+クラスターにおいて、どのスロットが割り当てられているか、そういった情報を伝播させる仕組みは重要です。真新しいクラスターの起動、スレーブが障害になったマスターに代わって昇格したときの構成変更、そのどちらにとっても中核の役割を担っています。
 
-The same mechanism allows nodes partitioned away for an indefinite amount of
-time to rejoin the cluster in a sensible way.
+同じ仕組みで、クラスターから長期にわたって外れてしまったノードを合理的に再加入させることができます。
 
-There are two ways hash slot configurations are propagated:
+スロットの割り当てに関する構成は、以下のように伝播します。
 
-1. Heartbeat messages. The sender of a ping or pong packet always adds information about the set of hash slots it (or its master, if it is a slave) serves.
-2. `UPDATE` messages. Since in every heartbeat packet there is information about the sender `configEpoch` and set of hash slots served, if a receiver of a heartbeat packet finds the sender information is stale, it will send a packet with new information, forcing the stale node to update its info.
+1. ハートビートのメッセージ。ping/pong パケットの送り元は、常にスロットに関する情報も送ります（スレーブの場合は、そのマスターに関する情報を送ります）。
+2. `UPDATE`メッセージ。すべてのハートビートパケットは送信元の `configEpoch` および割り当てられたスロットの情報を含むので、受信側で情報が古いことを検知すると新しい情報を返し、アップデートを促します。
 
-The receiver of a heartbeat or `UPDATE` message uses certain simple rules in
-order to update its table mapping hash slots to nodes. When a new Redis Cluster node is created, its local hash slot table is simply initialized to `NULL` entries so that each hash slot is not bound or linked to any node. This looks similar to the following:
+ハートビートの受信側あるいは `UPDATE`メッセージは、ノードに関するスロットのマッピングをシンプルな形で確実に更新するために使われます。新しいクラスターが作成されたとき、ローカルのスロットに関するテーブルは単純に `NULL` で初期化され、したがってはじめは各スロットはノードに紐づきません。このときは以下のような形に見えるでしょう。
 
 ```
 0 -> NULL
@@ -714,11 +712,11 @@ order to update its table mapping hash slots to nodes. When a new Redis Cluster 
 16383 -> NULL
 ```
 
-The first rule followed by a node in order to update its hash slot table is the following:
+ノードは、スロットテーブルを更新するために幾つかのルールに沿って動作します。
 
-**Rule 1**: If a hash slot is unassigned (set to `NULL`), and a known node claims it, I'll modify my hash slot table and associate the claimed hash slots to it.
+**ルール 1**: もしスロットが未割り当て（つまり `NULL`）であり、いずれかのノードが割り当てを要求しているとき、その割り当て要求に沿って自分が持っている情報を更新します。
 
-So if we receive a heartbeat from node A claiming to serve hash slots 1 and 2 with a configuration epoch value of 3, the table will be modified to:
+たとえばノード A からハートビートを受け取り、その A がスロット 1 と 2 を要求していて、epoch の値が 3 であると仮定すると、テーブルは以下のように更新されます。
 
 ```
 0 -> NULL
@@ -728,25 +726,18 @@ So if we receive a heartbeat from node A claiming to serve hash slots 1 and 2 wi
 16383 -> NULL
 ```
 
-When a new cluster is created, a system administrator needs to manually assign (using the `CLUSTER ADDSLOTS` command, via the redis-trib command line tool, or by any other means) the slots served by each master node only to the node itself, and the information will rapidly propagate across the cluster.
+新しいクラスターが作られるとき、システム管理者は手動で（ redis-tribコマンドラインツールなどを使って `CLUSTER ADDSLOTS` コマンドを使い）、各マスターにそれぞれスロットを割り当てる必要があります。その情報はクラスター内で迅速に伝播します。
 
-However this rule is not enough. We know that hash slot mapping can change
-during two events:
+しかし、これだけではルールは十分ではありません。2種類のイベントによってマッピングは変わりうるからです。
 
-1. A slave replaces its master during a failover.
-2. A slot is resharded from a node to a different one.
+1. フェイルオーバでスレーブがマスターに昇格する
+2. スロットがリシャーディングによって異なるノードに割り当てられる
 
-For now let's focus on failovers. When a slave fails over its master, it obtains
-a configuration epoch which is guaranteed to be greater than the one of its
-master (and more generally greater than any other configuration epoch
-generated previously). For example node B, which is a slave of A, may failover
-B with configuration epoch of 4. It will start to send heartbeat packets
-(the first time mass-broadcasting cluster-wide) and because of the following
-second rule, receivers will update their hash slot tables:
+まずはフェイルオーバについて見ていきましょう。フェイルオーバでスレーブがマスターに置き換わるとき、スレーブは epoch を持ち、いずれのマスターよりも大きな値であることが保証されています（そして、過去に生成されたどの値よりも大きいと言えるでしょう）。例えばノードB がノード A のスレーブであり、フェイルオーバのときに epoch が 4 だったとします。まずはじめにハートビートのパケットが（クラスターで見たときに全体に対して）送出され、後述する 2番目のルールによって、受信側はスロットのテーブルを更新します。
 
-**Rule 2**: If a hash slot is already assigned, and a known node is advertising it using a `configEpoch` that is greater than the `configEpoch` of the master currently associated with the slot, I'll rebind the hash slot to the new node.
+**ルール 2**: もしスロットがマスターにすでに割り当てられているときに、別のノードがより大きな値の `configEpoch` を主張しているとき、スロットのテーブルを新しいノードで更新します。
 
-So after receiving messages from B that claim to serve hash slots 1 and 2 with configuration epoch of 4, the receivers will update their table in the following way:
+つまり、B がスロット 1, 2 に関して epoch の値 4 のリクエストを送出したとき、受信側から見て以下のようなテーブルに更新されます。
 
 ```
 0 -> NULL
@@ -756,13 +747,12 @@ So after receiving messages from B that claim to serve hash slots 1 and 2 with c
 16383 -> NULL
 ```
 
-Liveness property: because of the second rule, eventually all nodes in the cluster will agree that the owner of a slot is the one with the greatest `configEpoch` among the nodes advertising it.
+生存属性: この 2番目のルールにより、最終的にクラスターの全てのノードは、スロットの割り当て先が必ず一番大きな `configEpoch` を持つようになります。
 
-This mechanism in Redis Cluster is called **last failover wins**.
+Redisクラスターにおいて、この仕組みは**フェイルオーバの後勝ち**と呼びます。
 
-The same happens during reshardings. When a node importing a hash slot
-completes the import operation, its configuration epoch is incremented to make
-sure the change will be propagated throughout the cluster.
+リシャーディングにおいても同じことが起こります。ノードがスロットのインポートを完了したとき epoch に加算を行うので、これによって変更がクラスター内で反映されます。
+
 
 UPDATE messages, a closer look
 ---
