@@ -754,47 +754,30 @@ Redisクラスターにおいて、この仕組みは**フェイルオーバの�
 リシャーディングにおいても同じことが起こります。ノードがスロットのインポートを完了したとき epoch に加算を行うので、これによって変更がクラスター内で反映されます。
 
 
-UPDATE messages, a closer look
+UPDATEメッセージ
 ---
 
-With the previous section in mind, it is easier to see how update messages
-work. Node A may rejoin the cluster after some time. It will send heartbeat
-packets where it claims it serves hash slots 1 and 2 with configuration epoch
-of 3. All the receivers with updated information will instead see that
-the same hash slots are associated with node B having an higher configuration
-epoch. Because of this they'll send an `UPDATE` message to A with the new
-configuration for the slots. A will update its configuration because of the
-**rule 2** above.
+UPDATEメッセージの挙動について、前章で触れたことは覚えているでしょうか。ノード A は少しの時間を置いてから、クラスターに再加入するでしょう。先の例に沿うと、ハートビートパケットを送出してスロット 1 と 2 の割り当てを、epoch 値が 3 で申請します。すべての受信側は最新の情報を持っているわけですから、確認すると指定されたスロットはノード B に割り当て済みで、より高い値の epoch が見つかるでしょう。これにより、受信側はスロットの最新の構成を含めた `UPDATE` メッセージを A に返します。A は**ルール 2** に沿って情報を更新します。
 
-How nodes rejoin the cluster
+
+クラスターへの再加入
 ---
 
-The same basic mechanism is used when a node rejoins a cluster.
-Continuing with the example above, node A will be notified
-that hash slots 1 and 2 are now served by B. Assuming that these two were
-the only hash slots served by A, the count of hash slots served by A will
-drop to 0! So A will **reconfigure to be a slave of the new master**.
+基本的な仕組みは、クラスターの再加入においても変わりません。引き続き同じ例を用いますが、ノード A は、すでに B がスロット 1, 2 の提供を担っていることを知りました。以前に A に割り当てられていたスロットはその 2つだけだったわけですから、この時点で割り当てられるスロットは 0 になってしまいました。したがって A は**新しいマスターのスレーブとして再構成されます**。
 
-The actual rule followed is a bit more complex than this. In general it may
-happen that A rejoins after a lot of time, in the meantime it may happen that
-hash slots originally served by A are served by multiple nodes, for example
-hash slot 1 may be served by B, and hash slot 2 by C.
+実際のルールは、もう少し複雑です。一般的には、A の再加入には時間を要します。A に割り当てられていたスロットが複数のノードに割り当てられていることが考えられますし、例えばスロット 1 がノード B に、スロット 2 がノード C に割り当てられているかもしれません。
 
-So the actual *Redis Cluster node role switch rule* is: **A master node will change its configuration to replicate (be a slave of) the node that stole its last hash slot**.
+なので、実際のところ*ノードの役割変更のルール*は、**最後のスロットを渡したノードからレプリケーションを行う**というものです。
 
-During reconfiguration, eventually the number of served hash slots will drop to zero, and the node will reconfigure accordingly. Note that in the base case this just means that the old master will be a slave of the slave that replaced it after a failover. However in the general form the rule covers all possible cases.
+再構成にあたり、スロットの数は 0 になります。これはつまり、マスターだったノードがフェイルオーバ後はスレーブだったノードのスレーブになる、ということを意味します。しかし、起こりうるすべてのケースを考慮できているはずです。
 
-Slaves do exactly the same: they reconfigure to replicate the node that
-stole the last hash slot of its former master.
+スレーブもまた、同じです。再構成のときには、そのマスターが最後に扱っていたスロットに関して確認を行い、そのスロットを渡したノードからレプリケーションを行います。
 
-Replica migration
+
+レプリカの移行
 ---
 
-Redis Cluster implements a concept called *replica migration* in order to
-improve the availability of the system. The idea is that in a cluster with
-a master-slave setup, if the map between slaves and masters is fixed
-availability is limited over time if multiple independent failures of single
-nodes happen.
+Redisクラスターはシステムの可用性を高めるため、*レプリカの移行*と呼ばれるコンセプトを取り入れています。マスターとスレーブで構築されたクラスターにおいて単体の障害が複数独立して発生したとき、もしマスタースレーブ間のマッピングが固定だと可用性が必ずしも高く保てない、という考えに基づいて考案されています。
 
 For example in a cluster where every master has a single slave, the cluster
 can continue operations as long as either the master or the slave fail, but not
