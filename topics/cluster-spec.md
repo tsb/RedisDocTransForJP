@@ -774,43 +774,31 @@ UPDATEメッセージの挙動について、前章で触れたことは覚え�
 スレーブもまた、同じです。再構成のときには、そのマスターが最後に扱っていたスロットに関して確認を行い、そのスロットを渡したノードからレプリケーションを行います。
 
 
-レプリカの移行
+レプリカ移行
 ---
 
-Redisクラスターはシステムの可用性を高めるため、*レプリカの移行*と呼ばれるコンセプトを取り入れています。マスターとスレーブで構築されたクラスターにおいて単体の障害が複数独立して発生したとき、もしマスタースレーブ間のマッピングが固定だと可用性が必ずしも高く保てない、という考えに基づいて考案されています。
+Redisクラスターはシステムの可用性を高めるため、*レプリカ移行*と呼ばれるコンセプトを取り入れています。マスターとスレーブで構築されたクラスターにおいて単体の障害が複数独立して発生したとき、もしマスタースレーブ間のマッピングが固定だと可用性が必ずしも高く保てない、という考えに基づいて考案されています。
 
-For example in a cluster where every master has a single slave, the cluster
-can continue operations as long as either the master or the slave fail, but not
-if both fail the same time. However there is a class of failures that are
-the independent failures of single nodes caused by hardware or software issues
-that can accumulate over time. For example:
+一例として、各マスターがひとつのスレーブを持つケースを考えると、マスターもしくはスレーブの障害に関しては問題なく継続できます。マスターとスレーブの両方が同時に障害に陥ると、その限りではありません。しかし、単体ノードがハードウェアやソフトウェアの問題で障害になり、その後の時間経過によって問題が生じるといったケースもあります
 
-* Master A has a single slave A1.
-* Master A fails. A1 is promoted as new master.
-* Three hours later A1 fails in an independent manner (unrelated to the failure of A). No other slave is available for promotion since node A is still down. The cluster cannot continue normal operations.
+* マスター A は単体のスレーブ A1 を持つ
+* マスターが障害になり、A1 が昇格してマスターになる
+* 3時間後、A1 もまた（ A の障害とは無関係に）障害に陥る。A もダウンしたままで、その時点で他にスレーブがなかった。この場合、クラスターは機能が継続できません。
 
-If the map between masters and slaves is fixed, the only way to make the cluster
-more resistant to the above scenario is to add slaves to every master, however
-this is costly as it requires more instances of Redis to be executed, more
-memory, and so forth.
+もしマスターとスレーブに関するマッピングが固定になっている場合、より可用性を高める方法としては、スレーブの台数を増やすほかありません。しかし、当然ながらこの方法はコストがかかり、Redis を実行するためのインスタンスや追加のメモリーが必要になります。
 
-An alternative is to create an asymmetry in the cluster, and let the cluster
-layout automatically change over time. For example the cluster may have three
-masters A, B, C. A and B have a single slave each, A1 and B1. However the master
-C is different and has two slaves: C1 and C2.
+別な方法としては、クラスターを非対称な形で作成し、クラスターの構成を適宜変えていくことが考えられます。例えば 3台のマスター A, B, C を持つクラスターについて考えてみましょう。A と B はスレーブ A1, B1 をそれぞれ持ち、C はスレーブ C1, C2 を持つとします。
 
-Replica migration is the process of automatic reconfiguration of a slave
-in order to *migrate* to a master that has no longer coverage (no working
-slaves). With replica migration the scenario mentioned above turns into the
-following:
+レプリカ移行は、保護されない（つまりスレーブが存在しない）マスターに対し、スレーブを*移行*するための自動的な再構成プロセスです。レプリカ移行を考慮に入れると、先のシナリオは以下のように変化します。
 
-* Master A fails. A1 is promoted.
-* C2 migrates as slave of A1, that is otherwise not backed by any slave.
-* Three hours later A1 fails as well.
-* C2 is promoted as new master to replace A1.
-* The cluster can continue the operations.
+* マスター A が障害となり、A1 が昇格する
+* スレーブがなくなってしまったので、C2 が新たに A1 のスレーブに移行する
+* 3時間後、A1 が同様に障害になる
+* C2 が A1 に代わり、新しいマスターとして昇格する
+* クラスターは機能を継続できる
 
-Replica migration algorithm
+
+レプリカ移行のアルゴリズム
 ---
 
 The migration algorithm does not use any form of agreement since the slave
