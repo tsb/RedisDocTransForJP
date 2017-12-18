@@ -779,7 +779,7 @@ UPDATEメッセージの挙動について、前章で触れたことは覚え�
 
 Redisクラスターはシステムの可用性を高めるため、*レプリカ移行*と呼ばれるコンセプトを取り入れています。マスターとスレーブで構築されたクラスターにおいて単体の障害が複数独立して発生したとき、もしマスタースレーブ間のマッピングが固定だと可用性が必ずしも高く保てない、という考えに基づいて考案されています。
 
-一例として、各マスターがひとつのスレーブを持つケースを考えると、マスターもしくはスレーブの障害に関しては問題なく継続できます。マスターとスレーブの両方が同時に障害に陥ると、その限りではありません。しかし、単体ノードがハードウェアやソフトウェアの問題で障害になり、その後の時間経過によって問題が生じるといったケースもあります
+一例として、各マスターがひとつのスレーブを持つケースを考えると、マスターもしくはスレーブの障害に関しては問題なく継続できます。マスターとスレーブの両方が同時に障害に陥ると、その限りではありません。しかし、単体ノードがハードウェアやソフトウェアの問題で障害になり、その後の時間経過によって問題が生じるといったケースもあります。
 
 * マスター A は単体のスレーブ A1 を持つ
 * マスターが障害になり、A1 が昇格してマスターになる
@@ -801,53 +801,24 @@ Redisクラスターはシステムの可用性を高めるため、*レプリ�
 レプリカ移行のアルゴリズム
 ---
 
-The migration algorithm does not use any form of agreement since the slave
-layout in a Redis Cluster is not part of the cluster configuration that needs
-to be consistent and/or versioned with config epochs. Instead it uses an
-algorithm to avoid mass-migration of slaves when a master is not backed.
-The algorithm guarantees that eventually (once the cluster configuration is
-stable) every master will be backed by at least one slave.
+レプリカ移行のアルゴリズムは、特別な確認や同意を必要としません。スレーブの構成に関しては、epoch 値などでバージョン管理する必要が無いからです。そういったアルゴリズムは、マスターが障害になって戻らないときに、複数のスレーブが同時に移行してしまう事象を防ぐために使われます。最終的に（構成が安定状態になったときに）各マスターが最低 1つのスレーブを持つことを、アルゴリズムが保証しています。
 
-This is how the algorithm works. To start we need to define what is a
-*good slave* in this context: a good slave is a slave not in `FAIL` state
-from the point of view of a given node.
+アルゴリズムについて説明しましょう。まず*良いスレーブ*について定義する必要がありますが、これは他のノードから見て `FAIL` 状態ではないスレーブのことです。
 
-The execution of the algorithm is triggered in every slave that detects that
-there is at least a single master without good slaves. However among all the
-slaves detecting this condition, only a subset should act. This subset is
-actually often a single slave unless different slaves have in a given moment
-a slightly different view of the failure state of other nodes.
+すべてのスレーブにおいて、良いスレーブを持たないマスターが少なくともひとつ検知されたとき、このアルゴリズムが実行されます。しかし、すべてのスレーブが検知したとしても、実際に実行するのは、その一部です。この一部というのは、それぞれのノードで見たときに異なる状態が検知されるケースを除けば、多くの場合単体のスレーブです。
 
-The *acting slave* is the slave among the masters with the maximum number
-of attached slaves, that is not in FAIL state and has the smallest node ID.
+もっとも多くのスレーブを持つマスター配下で、FAIL状態ではなく、ノードID が小さいスレーブを指して*アクティングスレーブ*と呼びます。
 
-So for example if there are 10 masters with 1 slave each, and 2 masters with
-5 slaves each, the slave that will try to migrate is - among the 2 masters
-having 5 slaves - the one with the lowest node ID. Given that no agreement
-is used, it is possible that when the cluster configuration is not stable,
-a race condition occurs where multiple slaves believe themselves to be
-the non-failing slave with the lower node ID (it is unlikely for this to happen
-in practice). If this happens, the result is multiple slaves migrating to the
-same master, which is harmless. If the race happens in a way that will leave
-the ceding master without slaves, as soon as the cluster is stable again
-the algorithm will be re-executed again and will migrate a slave back to
-the original master.
+ここで 10台のマスターがそれぞれ 1台のスレーブを持ち、2台のマスターが 5台のスレーブを持つ構成を考えます。5つのスレーブを持つ 2つのマスターのうち、最小のノードID を持つスレーブが移行されることになります。他のノードの同意は必要ありませんから、クラスターの構成が安定（stable）でなくとも可能であり、このようなときには複数台のスレーブで自分が最小のノードID を持つと判断する可能性がまれにあります（実際にはほとんど起こらないでしょう）。しかし、もしこの事象が起こったとしても、同じマスターのスレーブに複数台が移行するだけですので、問題はありません。また、この事象によってもし代わりのマスターにスレーブがいなくなってしまったとしても、クラスターはすぐに安定状態になってアルゴリズムが再実行され、改めてスレーブが元のマスターに移行されます。
+この結果、すべてのマスターには最低ひとつのスレーブが存在する状態になります。通常の動作としては、複数のスレーブを持つマスター配下から、ひとつのスレーブが孤立したマスターに移行します。
 
-Eventually every master will be backed by at least one slave. However,
-the normal behavior is that a single slave migrates from a master with
-multiple slaves to an orphaned master.
+このアルゴリズムは変更可能なパラメータ `cluster-migration-barrier` に関連します。この値は、移行前にマスターが保持しているべき良いスレーブの数を意味します。例えばパラメータ値が 2 の場合、マスターが 2つ以上のスレーブを保持しているときに限り移行が行われます。
 
-The algorithm is controlled by a user-configurable parameter called
-`cluster-migration-barrier`: the number of good slaves a master
-must be left with before a slave can migrate away. For example, if this
-parameter is set to 2, a slave can try to migrate only if its master remains
-with two working slaves.
 
-configEpoch conflicts resolution algorithm
+configEpoch の競合を解決するアルゴリズム
 ---
 
-When new `configEpoch` values are created via slave promotion during
-failovers, they are guaranteed to be unique.
+`configEpoch` の値がフェイルオーバ時のスレーブの昇格によって新しくなったとき、その値はユニークであることが保証されます。
 
 However there are two distinct events where new configEpoch values are
 created in an unsafe way, just incrementing the local `currentEpoch` of
