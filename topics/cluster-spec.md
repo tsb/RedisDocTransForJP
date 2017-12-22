@@ -820,125 +820,86 @@ configEpoch の競合を解決するアルゴリズム
 
 `configEpoch` の値がフェイルオーバ時のスレーブの昇格によって新しくなったとき、その値はユニークであることが保証されます。
 
-However there are two distinct events where new configEpoch values are
-created in an unsafe way, just incrementing the local `currentEpoch` of
-the local node and hoping there are no conflicts at the same time.
-Both the events are system-administrator triggered:
+しかし、新しい configEpoch の値が不完全な形で生成される、2種類のイベントがあります。ローカルで `currentEpoch` を増加させ、競合が発生しないことが期待されるものです。
+どちらもイベントはシステムの管理者によって実行されます。
 
-1. `CLUSTER FAILOVER` command with `TAKEOVER` option is able to manually promote a slave node into a master *without the majority of masters being available*. This is useful, for example, in multi data center setups.
-2. Migration of slots for cluster rebalancing also generates new configuration epochs inside the local node without agreement for performance reasons.
+1. `TAKEOBER` オプションによる `CLUSTER FAILOVER` コマンドに関しては、*多数派のマスターの承認なしで*手動でスレーブからマスターへの昇格が可能です。例えば、複数のデータセンターにおけるセットアップなどで、有用でしょう。
+2. スロットのリバランシングによる移行では、パフォーマンス上の理由により、ノードのローカルにおいて他の承認などを経ずに新しい epoch が生成されます。
 
-Specifically, during manual reshardings, when a hash slot is migrated from
-a node A to a node B, the resharding program will force B to upgrade
-its configuration to an epoch which is the greatest found in the cluster,
-plus 1 (unless the node is already the one with the greatest configuration
-epoch), without requiring agreement from other nodes.
-Usually a real world resharding involves moving several hundred hash slots
-(especially in small clusters). Requiring an agreement to generate new
-configuration epochs during reshardings, for each hash slot moved, is
-inefficient. Moreover it requires an fsync in each of the cluster nodes
-every time in order to store the new configuration. Because of the way it is
-performed instead, we only need a new config epoch when the first hash slot is moved,
-making it much more efficient in production environments.
+具体的には、手動のリシャーディング中に、スロットがノードA からノードB に移行すると、構成の中で一番大きな epoch に 1 を加えます（自身が最大ではない場合に限る）。このとき他のノードの同意は必要ありません。通常、現実世界においてはリシャーディングは（特に小さいクラスターでは）数百スロットを移動させることでしょう。リシャーディングのときに各スロットの移動で毎回、新しい epoch 値の同意を得ることは非効率です。さらに、各ノードは新しい構成情報を格納するにあたって、fsync を必要とします。その代わりに、最初のスロット移動だけで新しい epoch 値を必要とする方法を用いますが、これは特に本番環境においては効率的と言えるでしょう。
 
-However because of the two cases above, it is possible (though unlikely) to end
-with multiple nodes having the same configuration epoch. A resharding operation
-performed by the system administrator, and a failover happening at the same
-time (plus a lot of bad luck) could cause `currentEpoch` collisions if
-they are not propagated fast enough.
+しかし、上記の 2つのケースにおいて、（考えにくいですが）複数のノードが全く同じ epoch 値を保持してしまうことが起こりえます。リシャーディングがシステムの管理者によって実行され、その中で（不運なことに）同時にフェイルオーバが起こってしまい、情報の伝達が十分な速度で行われない場合に、`currentEpoch` の値で衝突が起こってしまうかもしれません。
 
-Moreover, software bugs and filesystem corruptions can also contribute
-to multiple nodes having the same configuration epoch.
+さらに言えば、ソフトウェアの不具合やファイルシステムの不整合などでも、複数のノードで同じ epoch 値を持つ事象は起こる可能性があります。
 
-When masters serving different hash slots have the same `configEpoch`, there
-are no issues. It is more important that slaves failing over a master have
-unique configuration epochs.
+もし異なるスロットを持つ複数のマスターが同じ `configEpoch` を持っていたとしても、それは問題ではありません。より大事なことは、フェイルオーバするときのスレーブが独自の epoch 値を持っているということです。
 
-That said, manual interventions or reshardings may change the cluster
-configuration in different ways. The Redis Cluster main liveness property
-requires that slot configurations always converge, so under every circumstance
-we really want all the master nodes to have a different `configEpoch`.
+手動での介入やリシャーディングによって、クラスターの構成がさまざまな形で変更される可能性があります。Redisクラスターの生存特性としては、スロットの構成が必ず収束し、すべての状況下ですべてのマスターが異なる `configEpoch` を持つことが望ましい。
 
-In order to enforce this, **a conflict resolution algorithm** is used in the
-event that two nodes end up with the same `configEpoch`.
+これを満たすために、2つのノードが同じ `configEpoch` を持つ場合に、**競合の解決アルゴリズム**を用います。
 
-* IF a master node detects another master node is advertising itself with
-the same `configEpoch`.
-* AND IF the node has a lexicographically smaller Node ID compared to the other node claiming the same `configEpoch`.
-* THEN it increments its `currentEpoch` by 1, and uses it as the new `configEpoch`.
+* もし、マスターノードが同じ `configEpoch` を持つ他のマスターを検知したら
+* かつ、もし、他のノードと比べて、自身が辞書的な並びにおいてより小さいノードID を持つとき
+* このとき、`currentEpoch` に 1 を加え、それを新しい `configEpoch` とします
 
-If there are any set of nodes with the same `configEpoch`, all the nodes but the one with the greatest Node ID will move forward, guaranteeing that, eventually, every node will pick a unique configEpoch regardless of what happened.
+同じ `configEpoch` を持つ幾つかのノードが存在した場合、一番大きなノードID を持つノードを除いて、順次ノードID が加算されていきます。これによって最終的に、すべてのノードが一意の configEpoch を持つことが保証されます。
 
-This mechanism also guarantees that after a fresh cluster is created, all
-nodes start with a different `configEpoch` (even if this is not actually
-used) since `redis-trib` makes sure to use `CONFIG SET-CONFIG-EPOCH` at startup.
-However if for some reason a node is left misconfigured, it will update
-its configuration to a different configuration epoch automatically.
+この仕組みは、まったく新しいクラスターを作るときにも、（まだ使われていないものですが）すべてのノードが異なる `configEpoch` を持つことを保証します。起動時には `redis-trib` が `CONFIG SET-CONFIG-EPOCH` を使用するためです。
+しかしながら、何らかの理由で設定ミスなどがあったとしても、epoch 値は自動的に更新されるでしょう。
 
-Node resets
+
+ノードのリセット
 ---
 
-Nodes can be software reset (without restarting them) in order to be reused
-in a different role or in a different cluster. This is useful in normal
-operations, in testing, and in cloud environments where a given node can
-be reprovisioned to join a different set of nodes to enlarge or create a new
-cluster.
+異なるクラスターで使うことを考えるときに、ノードはソフトウェアレベルで（ノードを再起動することなく）リセットすることができます。通常の使い方だけでなく、テストや、クラウド環境においても有用であり、新しいクラスターを作る時に組み込んだり、既存のノードセットを拡張するときにも使えます。
 
-In Redis Cluster nodes are reset using the `CLUSTER RESET` command. The
-command is provided in two variants:
+ノードは `CLUSTER RESET` コマンドでリセットできます。このコマンドは 2種類の引数を取ります。
 
 * `CLUSTER RESET SOFT`
 * `CLUSTER RESET HARD`
 
-The command must be sent directly to the node to reset. If no reset type is
-provided, a soft reset is performed.
+リセットにあたり、コマンドはノードに直接送られる必要があります。リセットのタイプが指定されない場合、デフォルトでソフトリセットが実行されます。
 
-The following is a list of operations performed by a reset:
+以下はリセットによって実行される操作です。
 
-1. Soft and hard reset: If the node is a slave, it is turned into a master, and its dataset is discarded. If the node is a master and contains keys the reset operation is aborted.
-2. Soft and hard reset: All the slots are released, and the manual failover state is reset.
-3. Soft and hard reset: All the other nodes in the nodes table are removed, so the node no longer knows any other node.
-4. Hard reset only: `currentEpoch`, `configEpoch`, and `lastVoteEpoch` are set to 0.
-5. Hard reset only: the Node ID is changed to a new random ID.
+1. ソフト/ハード: ノードがスレーブのとき、マスターに変更し、その上でデータ領域を破棄します。ノードがマスターでありデータを含む場合、リセット操作はキャンセルされます
+2. ソフト/ハード: すべてのスロットが解放され、フェイルオーバの状態をリセットします
+3. ソフト/ハード: 他のすべてのノードにおいて、ノードテーブルから除去されます。これにより、他のノードから認識されなくなります
+4. ハードリセットのみ: `currentEpoch` や `configEpoch` 、 `lastVoteEpoch` をすべて 0 にします
+5. ハードリセットのみ: ノードID をランダムに変更し、新しいものとします
 
-Master nodes with non-empty data sets can't be reset (since normally you want to reshard data to the other nodes). However, under special conditions when this is appropriate (e.g. when a cluster is totally destroyed with the intent of creating a new one), `FLUSHALL` must be executed before proceeding with the reset.
+データが空ではないマスターノードはリセットすることができません（通常は、他のノードにリシャーディングするでしょう）。しかし、特殊な条件下でどうしても実行する必要がある場合（例えばクラスターを作り直すために壊すときなど）は、`FLUSHALL` でデータをすべて消し、その上でリセットを行うようにします。
 
-Removing nodes from a cluster
+
+クラスターからノードを取り除く
 ---
 
-It is possible to practically remove a node from an existing cluster by
-resharding all its data to other nodes (if it is a master node) and
-shutting it down. However, the other nodes will still remember its node
-ID and address, and will attempt to connect with it.
+実用的には、マスターノードならば他のノードにデータをリシャーディングした上で、既存のクラスターからノードを取り除くことが可能です。しかし、他のノードは引き続きノードID やアドレスを覚えているので、接続しにくることがあるかもしれません。
 
-For this reason, when a node is removed we want to also remove its entry
-from all the other nodes tables. This is accomplished by using the
-`CLUSTER FORGET <node-id>` command.
+そのため、ノードを構成から取り除いたときは、他のすべてのノードにおけるテーブルからも情報を削除するべきです。これは `CLUSTER FORGET <node-id>` コマンドで実現できます。
 
-The command does two things:
+このコマンドは 2つのことを行います。
 
-1. It removes the node with the specified node ID from the nodes table.
-2. It sets a 60 second ban which prevents a node with the same node ID from being re-added.
+1. 指定されたノードID をテーブルから削除する
+2. 同じノードID からの再登録を 60秒間、拒否する
 
-The second operation is needed because Redis Cluster uses gossip in order to auto-discover nodes, so removing the node X from node A, could result in node B gossiping about node X to A again. Because of the 60 second ban, the Redis Cluster administration tools have 60 seconds in order to remove the node from all the nodes, preventing the re-addition of the node due to auto discovery.
+2つ目の操作は、Redisクラスターがノードの自動的な発見のためにゴシッププロトコルを使っているためで、ノードA からノードX を取り除いたとき、ノードB からのゴシップでまたノードX の情報が伝達されるかもしれません。60秒間拒否することで、Redisクラスターの管理ツールがすべてのノードから除去するのに必要な時間を確保でき、自動的に再登録されてしまうことを防げるでしょう。
 
-Further information is available in the `CLUSTER FORGET` documentation.
+追加の情報は `CLUSTER FORGET` ドキュメントを参照してください。
 
-Publish/Subscribe
+
+パブリッシュとサブスクライブ
 ===
 
-In a Redis Cluster clients can subscribe to every node, and can also
-publish to every other node. The cluster will make sure that published
-messages are forwarded as needed.
+Redisクラスターのクライアントはすべてのノードにサブスクライブすることができ、パブリッシュすることもできます。クラスターはパブリッシュされたメッセージを必要な先に転送します。
 
-The current implementation will simply broadcast each published message
-to all other nodes, but at some point this will be optimized either
-using Bloom filters or other algorithms.
+現在の実装は、シンプルにパブリッシュされたメッセージを全ノードに伝送するだけですが、いずれは Bloomフィルタや他のアルゴリズムでの最適化を考えています。
 
-Appendix
+
+補足
 ===
 
-Appendix A: CRC16 reference implementation in ANSI C
+補足A: CRC16 reference implementation in ANSI C
 ---
 
     /*
