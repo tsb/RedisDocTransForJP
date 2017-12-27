@@ -49,7 +49,7 @@ Redis のリスト型はシンプルな文字列のリストで、入力された順に並びます。
 
 
 <a name="sets"></a>
-セット型
+セット型（Sets）
 ---
 
 Redis におけるセット型は、順序付けられていない文字列の集合です。O(1)、つまり要素の数に関係なく一定の時間で要素の追加、削除、確認を行うことができます。
@@ -62,18 +62,18 @@ Redis におけるセット型は、順序付けられていない文字列の集合です。O(1)、つまり要素
 
 セット型で実現できることを考えてみましょう。
 
-* You can track unique things using Redis Sets. Want to know all the unique IP addresses visiting a given blog post? Simply use [SADD](/commands/sadd) every time you process a page view. You are sure repeated IPs will not be inserted.
-* Redis Sets are good to represent relations. You can create a tagging system with Redis using a Set to represent every tag. Then you can add all the IDs of all the objects having a given tag into a Set representing this particular tag, using the [SADD](/commands/sadd) command. Do you want all the IDs of all the Objects having three different tags at the same time? Just use [SINTER](/commands/sinter).
-* You can use Sets to extract elements at random using the [SPOP](/commands/spop) or [SRANDMEMBER](/commands/srandmember) commands.
+* セット型で、ユニークなものを追跡できます。特定のブログ記事を訪れた人の IPアドレスだけを知りたい？その場合は単純に毎回 [SADD](/commands/sadd) を使うことで実現できます。繰り返し同じ IPアドレスが記録されることはありません。
+* リレーションを表すことにも長けています。タグ付けを行う仕組みを作り、そのタグをセット型として保存することができます。このときも [SADD](/commands/sadd) を使うことで、特定のタグを持つ要素をすべて追加することができます。3つの異なるタグを持つすべての要素を知りたいときは？[SINTER](/commands/sinter) が役立ちますね。
+* セットの要素をランダムに取りたいときは、[SPOP](/commands/spop) や [SRANDMEMBER](/commands/srandmember) といったコマンドが使えます。
 
+その他、[セットコマンドの一覧](/commands#set) や、 [データ型のイントロダクション](/topics/data-types-intro) も参考にしてください。
 
-As usual, check the [full list of Set commands](/commands#set) for more information, or read the [introduction to Redis data types](/topics/data-types-intro).
 
 <a name="hashes"></a>
-Hashes
+ハッシュ型（Hashes）
 ---
 
-Redis Hashes are maps between string fields and string values, so they are the perfect data type to represent objects (e.g. A User with a number of fields like name, surname, age, and so forth):
+ハッシュ型は文字列フィールドと文字列バリューをマッピングするものであり、オブジェクトを格納するのに理想的なものです（例えば、氏名、年齢などといった幾つかのフィールドを持つユーザ等）。
 
     @cli
     HMSET user:1000 username antirez password P1pp0 age 34
@@ -81,30 +81,22 @@ Redis Hashes are maps between string fields and string values, so they are the p
     HSET user:1000 password 12345
     HGETALL user:1000
 
-A hash with a few fields (where few means up to one hundred or so) is stored in a way
-that takes very little space, so you can store millions of objects in a small
-Redis instance.
+非常に少ないフィールド（大体100程度まで）を持つハッシュ型はとても小さな空間に収まるので、小さな Redisインスタンスであっても数百万といった単位のオブジェクトを格納することができます。
 
-While Hashes are used mainly to represent objects, they are capable of storing many elements, so you can use Hashes for many other tasks as well.
+ハッシュ型が使われる場合は、たくさんの要素が格納されていることを意味し、さまざまな他のタスクにも活用できます。
 
-Every hash can store up to 2^32 - 1 field-value pairs (more than 4 billion).
+ハッシュ型の最大長は 2^32 -1 個（4億以上）の、フィールドとバリューのペアです。
 
-Check the [full list of Hash commands](/commands#hash) for more information, or read the [introduction to Redis data types](/topics/data-types-intro).
+参考として、[ハッシュコマンドの一覧](/commands#hash) や、 [データ型のイントロダクション](/topics/data-types-intro) もどうぞ。
+
 
 <a name="sorted-sets"></a>
-Sorted sets
+整列済みセット（Sorted sets）
 ---
 
-Redis Sorted Sets are, similarly to Redis Sets, non repeating collections of
-Strings. The difference is that every member of a Sorted Set is associated
-with score, that is used in order to take the sorted set ordered, from the
-smallest to the greatest score.  While members are unique, scores may be
-repeated.
+整列済みセットはセット型と同様、重複を許さない文字列の集合です。違いは、すべての要素がスコア順に整列済みである点であり、スコアの最小から最大という順になっています。要素自体は重複を許さずユニークなものですが、スコアは重複する場合があります。
 
-With sorted sets you can add, remove, or update elements in a very fast way
-(in a time proportional to the logarithm of the number of elements). Since
-elements are *taken in order* and not ordered afterwards, you can also get
-ranges by score or by rank (position) in a very fast way.
+整列済みセットでは、要素の追加、削除、更新は非常に高速に行われます（アルゴリズム上の所要時間は要素数の対数によります）。Since elements are *taken in order* and not ordered afterwards, you can also get ranges by score or by rank (position) in a very fast way.
 Accessing the middle of a sorted set is also very fast, so you can use
 Sorted Sets as a smart list of non repeating elements where you can quickly access
 everything you need: elements in order, fast existence test, fast access
