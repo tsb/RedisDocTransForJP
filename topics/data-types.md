@@ -22,58 +22,45 @@
 リスト型（Lists）
 ---
 
-Redis Lists are simply lists of strings, sorted by insertion order.
-It is possible to add elements to a Redis List pushing new elements on the head  (on the left) or on the tail (on the right) of the list.
+Redis のリスト型はシンプルな文字列のリストで、入力された順に並びます。
+左側の頭に新しい要素を挿入したり、右側つまり末尾に要素を追加することもできます。
 
-The [LPUSH](/commands/lpush) command inserts a new element on the head, while
-[RPUSH](/commands/rpush) inserts a new element on the tail. A new list is created
-when one of this operations is performed against an empty key.
-Similarly the key is removed from the key space if a list operation will
-empty the list. These are very handy semantics since all the list commands will
-behave exactly like they were called with an empty list if called with a
-non-existing key as argument.
+[LPUSH](/commands/lpush)コマンドは頭に新しい要素を挿入し、[RPUSH](/commands/rpush)コマンドは末尾に新しい要素を追加します。もともと空のキーに対してこれらの操作を行ったときは、新しいリストが作成されます。
+同様に、操作を行った時にリストが空になると、キー空間からキーが削除されます。リストコマンドに存在しないキーが渡されたときは、空のリストを渡されたときと同じように動作するためです。
 
-Some example of list operations and resulting lists:
+幾つかのリスト操作のサンプルを見てみましょう。
 
-    LPUSH mylist a   # now the list is "a"
-    LPUSH mylist b   # now the list is "b","a"
-    RPUSH mylist c   # now the list is "b","a","c" (RPUSH was used this time)
+    LPUSH mylist a   # リストは "a" となる
+    LPUSH mylist b   # リストは "b","a" となる
+    RPUSH mylist c   # リストは "b","a","c" となります（RPUSHが使われているため）
 
-The max length of a list is 2^32 - 1 elements (4294967295, more than 4 billion of elements per list).
+リストの最大長は 2^32 -1 個の要素（4294967295、つまりリスト当たり 4億）です。
 
-The main features of Redis Lists from the point of view of time complexity are
-the support for constant time insertion and deletion of elements near the
-head and tail, even with many millions of inserted items.
-Accessing elements is very fast near the extremes of the list but
-is slow if you try accessing the middle of a very big list, as it is
-an O(N) operation.
+リスト型の主な特徴としては、計算量の観点から見たときに、たとえ数百万の要素を持つリストであっても、頭と末尾への要素の挿入や削除がコンスタントな時間で行えるということです。要素へのアクセスは末端部分では非常に高速ですが、サイズが大きなリストであれば中間部分はとても遅くなり、O(N) になるでしょう。
 
-You can do many interesting things with Redis Lists, for instance you can:
+他にも興味深い機能があるので、紹介しましょう。
 
-* Model a timeline in a social network, using [LPUSH](/commands/lpush) in order to add new elements in the user time line, and using [LRANGE](/commands/lrange) in order to retrieve a few of recently inserted items.
-* You can use [LPUSH](/commands/lpush) together with [LTRIM](/commands/ltrim) to create a list that never exceeds a given number of elements, but just remembers the latest N elements.
-* Lists can be used as a message passing primitive, See for instance the well known [Resque](https://github.com/defunkt/resque) Ruby library for creating background jobs.
-* You can do a lot more with lists, this data type supports a number of commands, including blocking commands like [BLPOP](/commands/blpop).
+* ソーシャルネットワークのタイムラインを構成するときには、タイムラインに新しい要素を追加するために [LPUSH](/commands/lpush) が利用でき、最近のできごとを取得するために [LRANGE](/commands/lrange) が活用できます。
+* 最新の N個の要素だけを残し、かつリストの長さを一定に保つためには、[LPUSH](/commands/lpush) と [LTRIM](/commands/ltrim) を組み合わせて使います。
+* リスト型はメッセージを渡すプリミティブとしても活用できます。例としては、バックグラウンドジョブを作成するための Rubyライブラリ [Resque](https://github.com/defunkt/resque) があります。
+* その他にもリスト型で実現できることがあります。このデータ型では、[BLPOP](/commands/blpop) などのブロッキングコマンドなど、さまざまなコマンドがあります。
 
-Please check all the [available commands operating on lists](/commands#list) for more information, or read the [introduction to Redis data types](/topics/data-types-intro).
+他のコマンドは[リストで使えるコマンド群](/commands#list) を参照するか、[Redisデータ型のイントロダクション](/topics/data-types-intro) をお読みください。
+
 
 <a name="sets"></a>
-Sets
+セット型
 ---
 
-Redis Sets are an unordered collection of Strings. It is possible to add,
-remove, and test for existence of members in O(1) (constant time regardless
-of the number of elements contained inside the Set).
+Redis におけるセット型は、順序付けられていない文字列の集合です。O(1)、つまり要素の数に関係なく一定の時間で要素の追加、削除、確認を行うことができます。
 
-Redis Sets have the desirable property of not allowing repeated members. Adding the same element multiple times will result in a set having a single copy of this element. Practically speaking this means that adding a member does not require a *check if exists then add* operation.
+セット型では要素の繰り返しを許しません。同じ要素を複数回追加したとしても、この要素の中には一つだけが残ります。これは、*要素を追加するときに存在のチェックが必要ない*ということを意味します。
 
-A very interesting thing about Redis Sets is that they support a number of
-server side commands to compute sets starting from existing sets, so you
-can do unions, intersections, differences of sets in very short time.
+セット型の非常に興味深い点は、サーバサイドで計算を行うコマンドが幾つも実装されており、セット型について和集合や差集合、差分といった計算を非常に短い時間で実現できることです。
 
-The max number of members in a set is 2^32 - 1 (4294967295, more than 4 billion   of members per set).
+セット型の最大長は 2^32 -1 個の要素（4294967295、つまりセット当たり 4億）です。
 
-You can do many interesting things using Redis Sets, for instance you can:
+セット型で実現できることを考えてみましょう。
 
 * You can track unique things using Redis Sets. Want to know all the unique IP addresses visiting a given blog post? Simply use [SADD](/commands/sadd) every time you process a page view. You are sure repeated IPs will not be inserted.
 * Redis Sets are good to represent relations. You can create a tagging system with Redis using a Set to represent every tag. Then you can add all the IDs of all the objects having a given tag into a Set representing this particular tag, using the [SADD](/commands/sadd) command. Do you want all the IDs of all the Objects having three different tags at the same time? Just use [SINTER](/commands/sinter).
