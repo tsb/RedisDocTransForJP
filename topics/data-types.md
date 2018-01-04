@@ -96,33 +96,21 @@ Redis におけるセット型は、順序付けられていない文字列の集合です。O(1)、つまり要素
 
 整列済みセットはセット型と同様、重複を許さない文字列の集合です。違いは、すべての要素がスコア順に整列済みである点であり、スコアの最小から最大という順になっています。要素自体は重複を許さずユニークなものですが、スコアは重複する場合があります。
 
-整列済みセットでは、要素の追加、削除、更新は非常に高速に行われます（アルゴリズム上の所要時間は要素数の対数によります）。Since elements are *taken in order* and not ordered afterwards, you can also get ranges by score or by rank (position) in a very fast way.
-Accessing the middle of a sorted set is also very fast, so you can use
-Sorted Sets as a smart list of non repeating elements where you can quickly access
-everything you need: elements in order, fast existence test, fast access
-to elements in the middle!
+整列済みセットでは、要素の追加、削除、更新は非常に高速に行われます（アルゴリズム上の所要時間は要素数の対数によります）。要素は*順に並んでいて*、後から並べ替えるわけではないので、スコアやランク（の位置）で指定した範囲を非常に高速に取り出すことができます。ソートされたセットの中央部分へのアクセスも十分に高速なので、ユニークな値のリストとして使うこともできます。要素は並んでいて、存在確認も高速で、中央部分へのアクセスも速いことがメリットです。
 
-In short with sorted sets you can do a lot of tasks with great performance
-that are really hard to model in other kind of databases.
+この種のデータベースでは難しい操作は多くありますが、整列済みセットを用いれば高いパフォーマンスを発揮できることでしょう。
 
-With Sorted Sets you can:
+他にも整列済みセットでできることは数多くあります。
 
-* Take a leader board in a massive online game, where every time a new score
-is submitted you update it using [ZADD](/commands/zadd). You can easily
-take the top users using [ZRANGE](/commands/zrange), you can also, given an
-user name, return its rank in the listing using [ZRANK](/commands/zrank).
-Using ZRANK and ZRANGE together you can show users with a score similar to
-a given user. All very *quickly*.
-* Sorted Sets are often used in order to index data that is stored inside Redis.
-For instance if you have many hashes representing users, you can use a sorted set with elements having the age of the user as the score and the ID of the user as the value. So using [ZRANGEBYSCORE](/commands/zrangebyscore) it will be trivial and fast to retrieve all the users with a given interval of ages.
+* 負荷の高いオンラインゲームで上位の表示を行うための仕組みとして、常に新しいスコアを [ZADD](/commands/zadd) で更新していく方法が考えられます。上位のユーザは [ZRANGE](/commands/zrange) コマンドですぐに取得でき、ユーザ名も取れますし、[ZRANK](/commands/zrank) で順位を表示することもできます。ZRANK/ZRANGE を併用することで、指定したユーザの前後を表示することも可能です。これは*非常に高速に*動作します。
+* 整列済みセットは、すでに格納されたデータにインデックスを付ける目的でも多く使われます。例えば、ユーザと対応するたくさんのハッシュ値があるときには、年齢をスコアとし、ユーザID を値にしてみましょう。このときは [ZRANGEBYSCORE](/commands/zrangebyscore) コマンドを使うことで、指定した範囲の年齢のユーザを高速に取り出すことができます。
+
+整列済みセットは Redis の中でも特に発展したデータ型と言えます。ですので、[整列済みセットに関するコマンドの一覧](/commands#sorted_set) や [Redisデータ型の紹介](/topics/data-types-intro) は、できれば時間をかけて読んでいただければと思います。
 
 
-Sorted Sets are probably the most advanced Redis data types, so take some time to check the [full list of Sorted Set commands](/commands#sorted_set) to discover what you can do with Redis! Also you may want to read the [introduction to Redis data types](/topics/data-types-intro).
-
-Bitmaps and HyperLogLogs
+ビットマップと HyperLogLogs
 ---
 
-Redis also supports Bitmaps and HyperLogLogs which are actually data types
-based on the String base type, but having their own semantics.
+Redis は、文字列データ型をベースとしたものですが、ビットマップと HyperLogLogs も独自にサポートします。
 
-Please refer to the [introduction to Redis data types](/topics/data-types-intro) for information about those types.
+さらなる情報は、[Redisデータ型の紹介](/topics/data-types-intro) などをご覧ください。
